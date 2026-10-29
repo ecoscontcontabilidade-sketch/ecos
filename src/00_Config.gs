@@ -141,7 +141,8 @@ function urlApp_() {
 function linkAcompanhamento_(codigo) {
   var base = urlApp_();
   if (!base) return '';
-  return base + (base.indexOf('?') >= 0 ? '&' : '?') + 'c=' + encodeURIComponent(codigo);
+  // Parâmetro "codigo": links com "?c=" abriram a página de erro do Google Drive em produção.
+  return base + (base.indexOf('?') >= 0 ? '&' : '?') + 'codigo=' + encodeURIComponent(codigo);
 }
 
 function linkWhatsApp_(texto) {

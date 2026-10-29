@@ -130,7 +130,7 @@
     }
     mostrar($('telaConsulta'), false);
     mostrar($('telaResultado'), true);
-    try { google.script.history.replace(null, { c: r.codigo }); } catch (e) { /* opcional */ }
+    try { google.script.history.replace(null, { codigo: r.codigo }); } catch (e) { /* opcional */ }
     window.scrollTo(0, 0);
     $('resEmpresa').setAttribute('tabindex', '-1');
     $('resEmpresa').focus();

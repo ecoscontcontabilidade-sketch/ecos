@@ -70,7 +70,7 @@ async function stub(page, amb) {
   const navegador = await chromium.launch();
   const codigo = amb.g.processoPorTask_('t2').codigo;
 
-  amb.g.doGet({ parameter: { c: codigo } });
+  amb.g.doGet({ parameter: { codigo: codigo } });
   const portalHtml = amb.templates.Portal;
   amb.g.doGet({ parameter: {} });
   const portalVazio = amb.templates.Portal;

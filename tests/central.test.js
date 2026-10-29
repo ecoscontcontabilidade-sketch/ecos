@@ -126,7 +126,7 @@ test('primeira sincronização cadastra sem enviar e-mail; mudança no ClickUp e
   assert.equal(email.to, 'cliente@empresa.com.br');
   assert.equal(email.subject, 'Atualização do seu processo societário | Ecos Contabilidade');
   assert.match(email.htmlBody, /ACOMPANHAR MEU PROCESSO/);
-  assert.ok(email.htmlBody.includes('?c=' + encodeURIComponent(linha.codigo)));
+  assert.ok(email.htmlBody.includes('?codigo=' + encodeURIComponent(linha.codigo)));
   assert.match(email.htmlBody, /Seu processo avançou!/);
   assert.ok(!email.htmlBody.includes('t1'), 'e-mail não expõe o ID interno da tarefa');
 
@@ -451,7 +451,7 @@ test('retenção remove eventos antigos', () => {
 
 test('doGet renderiza portal e painel com escape do código na URL', () => {
   const amb = ambienteInstalado();
-  exec(amb, (g) => g.doGet({ parameter: { c: '"><script>x</script>' } }));
+  exec(amb, (g) => g.doGet({ parameter: { codigo: '"><script>x</script>' } }));
   assert.ok(!amb.templates.Portal.includes('<script>x</script>'));
   assert.match(amb.templates.Portal, /data-codigo="scriptxscript"/);
   exec(amb, (g) => g.doGet({ parameter: { p: 'admin' } }));
@@ -495,7 +495,7 @@ test('lista sem campos personalizados: e-mail da descrição, código em coment�
   exec(amb, (g) => g.sincronizar_({}));
   const linha = exec(amb, (g) => g.processoPorTask_('t1'));
   assert.match(amb.clickup.tasks.t1.comentarios[0], new RegExp(linha.codigo));
-  assert.match(amb.clickup.tasks.t1.comentarios[0], /\?c=ECOS-/);
+  assert.match(amb.clickup.tasks.t1.comentarios[0], /\?codigo=ECOS-/);
   assert.equal(amb.emails.length, 0);
 
   amb.clickup.mudarStatus('t1', 'exigência');

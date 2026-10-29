@@ -12,7 +12,7 @@ function doGet(e) {
   var p = (e && e.parameter) || {};
   var pagina = p.p === 'admin' ? 'Admin' : 'Portal';
   var t = HtmlService.createTemplateFromFile(pagina);
-  t.codigoInicial = String(p.c || '').replace(/[^A-Za-z0-9-]/g, '').slice(0, 24);
+  t.codigoInicial = String(p.codigo || p.c || '').replace(/[^A-Za-z0-9-]/g, '').slice(0, 24);
   t.nomeExibicao = prop_('NOME_EXIBICAO');
   return t.evaluate()
     .setTitle(pagina === 'Admin' ? 'Painel — ' + APP.NOME : 'Acompanhe seu processo — ' + prop_('NOME_EXIBICAO'))
