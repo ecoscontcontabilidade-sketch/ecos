@@ -38,7 +38,7 @@
 
   function aplicarConfig(c) {
     config = c;
-    if (c.logo) { $('logo').src = c.logo; $('logo').alt = c.nomeExibicao; mostrar($('logo'), true); mostrar($('marcaNome'), false); }
+    if (c.logo) { $('logo').src = c.logo; mostrar($('logo'), true); } // logo simplificado = só o símbolo; o nome continua visível
     $('rodapeAssinatura').textContent = c.assinatura || '';
     var mini = $('etapasMini');
     mini.textContent = '';
