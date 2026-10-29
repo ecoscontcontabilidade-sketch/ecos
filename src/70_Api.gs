@@ -219,13 +219,11 @@ function detalheProcesso_(p) {
   var base = visaoInterna_(p, linha, notifs[0], dias);
   base.descricao = p.descricao;
   base.orientacao = p.orientacao;
-  base.temCampoOrientacao = !!(p.campos.orientacao && p.campos.orientacao.id);
   base.nomeCliente = p.nomeCliente;
   base.prazo = p.prazo;
   base.criadoTexto = fmtDataHora_(p.criadoEm);
   base.linkPublico = linha && linha.ativo ? linkAcompanhamento_(linha.codigo) : '';
   base.etapas = montarLinhaDoTempo_(p.statusKey || (linha ? linha.statusFluxo : ''), historicoDeEtapas_(eventos));
-  base.camposAusentes = Object.keys(p.campos).filter(function (k) { return !p.campos[k]; }).map(function (k) { return nomesCampos_()[k]; });
   base.eventos = eventos.slice().reverse().map(function (e) {
     var a = statusPorChave_(String(e.statusAnterior)), n = statusPorChave_(String(e.statusNovo));
     return {
@@ -307,22 +305,6 @@ function adminAlterarStatus(token, taskId, novoKey, statusEsperado) {
       detalhe.resultado = { notificado: res.notificado, eventoId: res.eventoId };
       return detalhe;
     });
-  });
-}
-
-/** Grava a orientação ao cliente (campo do ClickUp) — exibida apenas em "Exigência". */
-function adminSalvarOrientacao(token, taskId, texto) {
-  return executarApi_('adminSalvarOrientacao', function () {
-    var usuario = exigirAdmin_(token);
-    var p = tarefaAutorizada_(taskId);
-    var campo = p.campos.orientacao;
-    if (!campo || !campo.id) throw new ErroApp('Crie o campo "' + nomesCampos_().orientacao + '" na lista do ClickUp para usar este recurso.', 'CONFIG');
-    var valor = limparTexto_(texto, 2000);
-    cuGravarCampo_(p.taskId, campo.id, valor);
-    var linha = processoPorTask_(p.taskId);
-    registrarEvento_({ taskId: p.taskId, codigo: linha ? linha.codigo : '', tipo: 'ORIENTACAO_ATUALIZADA', origem: 'PLATAFORMA',
-      usuario: usuario, resultadoSync: 'CONFIRMADO_CLICKUP', detalhe: valor ? 'Orientação ao cliente atualizada.' : 'Orientação ao cliente removida.' });
-    return detalheProcesso_(tarefaAutorizada_(taskId));
   });
 }
 
@@ -462,7 +444,7 @@ function diagnostico_() {
         (campos.indexOf(normalizar_(nc[k])) >= 0 ? d.camposEncontrados : d.camposFaltando).push(nc[k]);
       });
       if (d.statusFaltando.length) d.problemas.push('Status ausentes na lista do ClickUp: ' + d.statusFaltando.join(', ') + '.');
-      if (d.camposFaltando.indexOf(nc.email) >= 0) d.problemas.push('Campo "' + nc.email + '" ausente: nenhum e-mail poderá ser enviado.');
+      // Campos personalizados são opcionais: sem eles, os dados vêm da descrição da tarefa.
     } catch (e) {
       d.problemas.push('Falha ao consultar o ClickUp: ' + e.message);
     }

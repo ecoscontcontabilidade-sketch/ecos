@@ -47,6 +47,53 @@ function separarNomeTarefa_(nome) {
   return { tipo: n.slice(0, i).trim(), empresa: n.slice(i + 3).trim() };
 }
 
+/** Rótulos aceitos na descrição da tarefa, por papel (comparados sem acento/maiúsculas). */
+var ROTULOS_DESCRICAO = {
+  email: ['e-mail do cliente', 'email do cliente', 'e-mail', 'email'],
+  nomeCliente: ['nome do cliente', 'cliente'],
+  empresa: ['empresa'],
+  cnpj: ['cnpj'],
+  orientacao: ['orientacao ao cliente', 'orientacao']
+};
+
+/**
+ * Lê os dados do cliente escritos na descrição da tarefa, no formato
+ * "Rótulo: valor" (uma informação por linha). Alternativa gratuita aos campos
+ * personalizados do ClickUp. A orientação pode ocupar várias linhas e termina
+ * numa linha em branco ou no próximo rótulo. Linhas sem rótulo são ignoradas.
+ */
+function dadosDaDescricao_(texto, nomes) {
+  var rotulos = {};
+  Object.keys(ROTULOS_DESCRICAO).forEach(function (papel) {
+    ROTULOS_DESCRICAO[papel].concat(nomes && nomes[papel] ? [nomes[papel]] : []).forEach(function (r) {
+      rotulos[normalizar_(r)] = papel;
+    });
+  });
+  var saida = {};
+  var atual = null;
+  String(texto || '').split(/\r?\n/).forEach(function (bruta) {
+    var linha = bruta.replace(/[*_`]/g, '').trim();
+    var m = linha.match(/^[-•>]?\s*([^:]{2,40}?)\s*:\s*(.*)$/);
+    var papel = m ? rotulos[normalizar_(m[1])] : null;
+    if (papel) {
+      atual = papel;
+      if (saida[papel] === undefined) saida[papel] = m[2].trim();
+      else atual = null; // primeira ocorrência prevalece
+      return;
+    }
+    if (m && /^(codigo de acompanhamento|codigo)$/.test(normalizar_(m[1]))) { atual = null; return; }
+    if (!linha) { atual = null; return; }
+    if (atual === 'orientacao') saida.orientacao = (saida.orientacao ? saida.orientacao + '\n' : '') + linha;
+    else atual = null;
+  });
+  if (saida.email) {
+    var em = saida.email.match(/[^\s@<>()\[\]:;,"']+@[^\s@<>()\[\]:;,"']+\.[A-Za-z]{2,}/);
+    saida.email = em ? em[0] : '';
+  }
+  Object.keys(saida).forEach(function (k) { saida[k] = limparTexto_(saida[k], k === 'orientacao' ? 2000 : 200); });
+  return saida;
+}
+
 /**
  * Converte uma tarefa da API do ClickUp no modelo interno de processo.
  * Função pura (sem chamadas externas) — coberta pelos testes automatizados.
@@ -59,7 +106,9 @@ function mapearTarefa_(task, ctx) {
   var tag = normalizar_(ctx.tag || '');
   var tags = (task.tags || []).map(function (t) { return t.name; });
   var statusNome = task.status && task.status.status ? task.status.status : '';
-  var v = function (papel) { return campos[papel] ? campos[papel].valor : ''; };
+  var desc = dadosDaDescricao_(task.text_content || task.description || '', nomes);
+  // Campo personalizado preenchido tem prioridade; senão, vale a descrição da tarefa.
+  var v = function (papel) { return (campos[papel] && campos[papel].valor) || desc[papel] || ''; };
 
   return {
     taskId: String(task.id),

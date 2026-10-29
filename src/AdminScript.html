@@ -336,8 +336,8 @@
     var corpo = $('painelCorpo');
     corpo.textContent = '';
 
-    if (d.camposAusentes && d.camposAusentes.length) {
-      corpo.appendChild(h('div', { classe: 'aviso aviso-info', texto: 'Campos personalizados não encontrados na lista do ClickUp (apenas o e-mail é indispensável): ' + d.camposAusentes.join(', ') + '.' }));
+    if (d.acompanhamento && !d.temEmail) {
+      corpo.appendChild(h('div', { classe: 'aviso aviso-atencao', texto: 'Sem e-mail do cliente: nenhuma notificação será enviada. No ClickUp, escreva na descrição da tarefa uma linha "E-mail do cliente: nome@empresa.com.br".' }));
     }
     if (!d.acompanhamento) {
       corpo.appendChild(h('div', { classe: 'aviso aviso-atencao', texto: 'Este processo não está em acompanhamento do cliente (sem a etiqueta configurada).' }));
@@ -381,22 +381,11 @@
       h('div', { classe: 'linha-acao' }, [h('div', { classe: 'campo' }, [h('label', { for: 'novoStatus', texto: 'Novo status' }), sel]), btnStatus])
     ]));
 
-    // Orientação ao cliente
-    if (d.temCampoOrientacao) {
-      var ta = h('textarea', { classe: 'entrada', id: 'orientacao', maxlength: '2000' });
-      ta.value = d.orientacao || '';
-      var btnOri = h('button', { type: 'button', classe: 'botao botao-secundario', texto: 'Salvar orientação' });
-      btnOri.addEventListener('click', function () {
-        ocupado(btnOri, true, 'Salvando…');
-        chamar('adminSalvarOrientacao', estado.token, d.taskId, ta.value).then(function (nd) {
-          toast('Orientação salva no ClickUp.'); mostrarDetalhe(nd);
-        }).catch(function (e) { toast(e.message, 'erro'); ocupado(btnOri, false); });
-      });
-      corpo.appendChild(secao('Orientação ao cliente', [
-        h('p', { classe: 'dica', texto: 'Exibida ao cliente somente enquanto o status for "Exigência". Escreva apenas o que foi autorizado pela equipe.', style: 'margin-bottom:8px' }),
-        ta, h('div', { style: 'margin-top:10px' }, [btnOri])
-      ]));
-    }
+    // Orientação ao cliente (lida da descrição da tarefa ou do campo personalizado)
+    corpo.appendChild(secao('Orientação ao cliente', [
+      h('p', { classe: 'dica', style: 'margin-bottom:8px', texto: 'Exibida ao cliente somente enquanto o status for "Exigência". Para escrever ou alterar, edite no ClickUp a linha "Orientação ao cliente:" na descrição da tarefa. Escreva apenas o que foi autorizado pela equipe.' }),
+      d.orientacao ? h('div', { classe: 'aviso aviso-info', style: 'white-space:pre-line', texto: d.orientacao }) : h('p', { classe: 'sub', texto: 'Nenhuma orientação cadastrada.' })
+    ]));
 
     // Acompanhamento do cliente
     if (d.codigo) {

@@ -38,7 +38,7 @@ npm test
 | Dependência | Configuração |
 | --- | --- |
 | Lista "Processos" no ClickUp com os 7 status | Manual, no ClickUp (passo 1.1) |
-| Campo "E-mail do cliente" (e opcionais) | Manual, no ClickUp (passo 1.2) |
+| E-mail do cliente na descrição da tarefa (`E-mail do cliente: …`) | Por tarefa, no ClickUp (passo 1.2) |
 | Etiqueta `acompanhamento-cliente` | Manual, no ClickUp (passo 1.3) |
 | Token de API do ClickUp | Propriedade `CLICKUP_TOKEN` |
 | Conta Google que publica e envia os e-mails | `ecos.cont.contabilidade@gmail.com` (100 e-mails/dia na conta gratuita) |

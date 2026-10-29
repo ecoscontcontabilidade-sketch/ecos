@@ -17,7 +17,7 @@
 Consequências para o projeto:
 
 1. **Status**: dos 7 status exigidos, só `Em análise` e `Deferido` existem. Os outros 5 precisam ser criados na lista (procedimento em `IMPLANTACAO.md`). A aplicação não altera a configuração da lista por conta própria.
-2. **Campos**: não há e-mail, CNPJ nem nome do cliente nas tarefas. O e-mail é **indispensável** para as notificações; os demais são opcionais (empresa e tipo são extraídos do nome da tarefa, no padrão `TIPO - EMPRESA` que a equipe já usa).
+2. **Campos**: não há e-mail, CNPJ nem nome do cliente nas tarefas, e o plano gratuito limita o uso de campos personalizados. A Central lê esses dados de linhas `Rótulo: valor` na **descrição da tarefa** (campos personalizados, se houver, têm prioridade) e registra o código do cliente como comentário. O e-mail é **indispensável** para as notificações; os demais são opcionais (empresa e tipo são extraídos do nome da tarefa, no padrão `TIPO - EMPRESA` que a equipe já usa).
 3. **Lista mista**: para não expor nem notificar tarefas internas, só participam da Central as tarefas com a etiqueta **`acompanhamento-cliente`** (configurável). O painel lista as tarefas sem etiqueta e permite ativá-las com um clique.
 
 ### Identidade visual (Drive)

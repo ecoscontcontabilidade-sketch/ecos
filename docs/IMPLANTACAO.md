@@ -23,20 +23,29 @@ Na lista **Processos** (Space *ECOS ASSESSORIA CONTÁBIL*): `…` → **Lista** 
 - Se quiser que algum status antigo conte como etapa do fluxo, use a propriedade `STATUS_ALIASES` (ex.: `{"complete":"DEFERIDO"}`). Por padrão, nenhum status antigo é mapeado: a Central não presume equivalências.
 - Ao remover status com tarefas, o ClickUp pede para movê-las. Revise antes, porque as tarefas fechadas ficam com o status de destino.
 
-### 1.2 Campos personalizados (lista "Processos")
+### 1.2 Dados do cliente (descrição da tarefa)
 
-`+` na coluna de campos → criar:
+No plano gratuito do ClickUp, os campos personalizados têm uso limitado. Por isso a Central lê os dados do cliente da **descrição da tarefa**, uma informação por linha, no formato `Rótulo: valor`:
 
-| Nome do campo (exato) | Tipo | Uso | Obrigatório |
-| --- | --- | --- | --- |
-| `E-mail do cliente` | E-mail | destinatário das notificações | **sim** |
-| `Nome do cliente` | Texto | saudação "Olá, Nome." | não |
-| `Empresa` | Texto | nome exibido; se vazio, usa o trecho após " - " no nome da tarefa | não |
-| `CNPJ` | Texto | filtro do painel (nunca exibido ao cliente) | não |
-| `Orientação ao cliente` | Área de texto (texto longo) | texto exibido ao cliente **somente** em Exigência | recomendado |
-| `Código de acompanhamento` | Texto | preenchido pela Central (referência para a equipe) | recomendado |
+```
+E-mail do cliente: cliente@empresa.com.br
+Nome do cliente: Maria
+CNPJ: 12.345.678/0001-90
+Orientação ao cliente: Enviar o comprovante de endereço atualizado.
+```
 
-Os nomes podem ser outros: ajuste as propriedades `CAMPO_*`. Nenhum campo existia na análise.
+| Rótulo (aceita variações) | Uso | Obrigatório |
+| --- | --- | --- |
+| `E-mail do cliente` (ou `E-mail`) | destinatário das notificações | **sim**, para enviar e-mails |
+| `Nome do cliente` (ou `Cliente`) | saudação "Olá, Maria." | não |
+| `Empresa` | nome exibido; se ausente, usa o trecho após " - " no nome da tarefa | não |
+| `CNPJ` | filtro do painel (nunca exibido ao cliente) | não |
+| `Orientação ao cliente` (ou `Orientação`) | exibida ao cliente **somente** em Exigência; pode ter várias linhas, termina na primeira linha em branco | não |
+
+- Maiúsculas, acentos e negrito são ignorados; vale a primeira ocorrência de cada rótulo.
+- O restante da descrição continua interno: o portal e os e-mails nunca exibem a descrição.
+- O **código de acompanhamento** é registrado pela Central como **comentário** na tarefa, com o link para enviar ao cliente.
+- Em plano pago, também funcionam campos personalizados com esses mesmos nomes (`CAMPO_*`); quando preenchidos, têm prioridade sobre a descrição.
 
 ### 1.3 Etiqueta
 
@@ -118,7 +127,7 @@ Ao alterar o código, use **Implantar → Gerenciar implantações → editar �
 - [ ] Mudar o status **no ClickUp** → em até 5 min o portal mostra a nova etapa e chega **um** e-mail.
 - [ ] Mudar o status **pelo painel** → ClickUp atualizado, **um** e-mail, nenhum e-mail extra após 10 min.
 - [ ] Processo sem e-mail: status muda, painel mostra "Sem e-mail", nenhum envio.
-- [ ] Exigência com orientação: aparece no portal e no e-mail; sem orientação, só a mensagem padrão.
+- [ ] Exigência com a linha "Orientação ao cliente:" na descrição: aparece no portal e no e-mail; sem ela, só a mensagem padrão.
 - [ ] Código inválido no portal: mensagem genérica; após 10 tentativas, bloqueio temporário.
 - [ ] Portal testado no celular (Android/iOS) e no computador.
 - [ ] Botão do WhatsApp abre o número oficial.

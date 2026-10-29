@@ -14,6 +14,7 @@
  *   PUT  /task/{task_id}                    — alterar status
  *   POST /task/{task_id}/field/{field_id}   — gravar valor de campo personalizado
  *   POST /task/{task_id}/tag/{tag_name}     — adicionar etiqueta
+ *   POST /task/{task_id}/comment            — comentário com o código do cliente
  *
  * Limites: o ClickUp aplica limite de requisições por token (100/min nos planos
  * Free/Unlimited/Business). Em HTTP 429 o cliente aguarda o reset informado em
@@ -167,6 +168,10 @@ function cuAlterarStatus_(taskId, nomeStatus) {
 
 function cuGravarCampo_(taskId, fieldId, valor) {
   return cuFetch_('post', '/task/' + encodeURIComponent(taskId) + '/field/' + encodeURIComponent(fieldId), { body: { value: valor } });
+}
+
+function cuComentar_(taskId, texto) {
+  return cuFetch_('post', '/task/' + encodeURIComponent(taskId) + '/comment', { body: { comment_text: texto, notify_all: false } });
 }
 
 function cuAdicionarTag_(taskId, tag) {

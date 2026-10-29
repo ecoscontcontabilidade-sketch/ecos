@@ -205,14 +205,29 @@ function registrarMudancaStatus_(p, linha, ctx) {
   return { eventoId: eventoId, notificado: notificado, duplicado: false };
 }
 
-/** Grava o código público no campo do ClickUp, se o campo existir (melhor esforço). */
+/**
+ * Registra o código público na tarefa do ClickUp (melhor esforço): no campo
+ * "Código de acompanhamento" quando ele existe e aceita gravação; senão — por
+ * exemplo, no plano gratuito, cujos campos personalizados têm uso limitado —
+ * como comentário da tarefa, com o link do cliente.
+ */
 function gravarCodigoNoClickUp_(p, codigo) {
   var campo = p.campos && p.campos.codigo;
-  if (!campo || !campo.id || campo.valor === codigo) return;
+  if (campo && campo.valor === codigo) return;
+  if (campo && campo.id) {
+    try {
+      cuGravarCampo_(p.taskId, campo.id, codigo);
+      return;
+    } catch (e) {
+      console.warn('Campo de código indisponível na tarefa ' + p.taskId + ' (' + e.message + '); usando comentário.');
+    }
+  }
   try {
-    cuGravarCampo_(p.taskId, campo.id, codigo);
-  } catch (e) {
-    console.warn('Não foi possível gravar o código no ClickUp para a tarefa ' + p.taskId + ': ' + e.message);
+    var link = linkAcompanhamento_(codigo);
+    cuComentar_(p.taskId, 'Central de Processos — código de acompanhamento do cliente: ' + codigo +
+      (link ? '\nLink para o cliente: ' + link : '') + '\n(Comentário automático. Códigos anteriores desta tarefa deixam de valer.)');
+  } catch (e2) {
+    console.warn('Não foi possível registrar o código no ClickUp para a tarefa ' + p.taskId + ': ' + e2.message);
   }
 }
 

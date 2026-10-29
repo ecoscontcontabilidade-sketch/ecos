@@ -164,6 +164,11 @@ function criarClickUp(opcoes) {
       t.date_updated = String(estado.tick());
       return resp(200, {});
     }
+    if ((m = p.match(/^\/task\/([^/]+)\/comment$/)) && metodo === 'post') {
+      const t = estado.tasks[m[1]];
+      t.comentarios = (t.comentarios || []).concat([JSON.parse(req.payload).comment_text]);
+      return resp(200, { id: 'c' + t.comentarios.length });
+    }
     if ((m = p.match(/^\/task\/([^/]+)\/tag\/([^/]+)$/)) && metodo === 'post') {
       const t = estado.tasks[m[1]];
       t.tags.push({ name: decodeURIComponent(m[2]) });
@@ -207,7 +212,7 @@ function criarAmbiente(opcoes) {
   const clickup = criarClickUp({
     listId: '901326635055',
     statuses: opcoes.statuses || ['to do', 'aguardando documentação', 'viabilidade', 'dbe', 'vre digital - jucesp', 'em análise', 'exigência', 'deferido', 'complete'],
-    campos: opcoes.campos || [
+    campos: opcoes.campos !== undefined ? opcoes.campos : [
       { id: 'f-email', name: 'E-mail do cliente', type: 'email' },
       { id: 'f-nome', name: 'Nome do cliente', type: 'short_text' },
       { id: 'f-cnpj', name: 'CNPJ', type: 'short_text' },
@@ -304,11 +309,11 @@ function criarAmbiente(opcoes) {
 }
 
 /** Ambiente já instalado e configurado como na Ecos. */
-function ambienteInstalado(extraProps) {
-  const amb = criarAmbiente({
+function ambienteInstalado(extraProps, opcoesAmbiente) {
+  const amb = criarAmbiente(Object.assign({
     usuarioAtivo: 'ecos.cont.contabilidade@gmail.com',
     props: Object.assign({ CLICKUP_TOKEN: 'pk_teste', ADMIN_EMAILS: 'admin@ecos.com.br, outra@ecos.com.br', APP_URL: 'https://script.google.com/macros/s/TESTE/exec' }, extraProps || {})
-  });
+  }, opcoesAmbiente || {}));
   amb.g.instalar();
   amb.g.memoProps_ = null;
   amb.usuarioAtivo = ''; // daqui em diante, chamadas simulam visitantes anônimos do Web App

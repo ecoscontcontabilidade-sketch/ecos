@@ -465,3 +465,61 @@ test('scripts do navegador são JavaScript válido', () => {
     assert.doesNotThrow(() => new vm.Script(js, { filename: arq }), arq);
   }
 });
+
+/* ---------------- Plano gratuito: dados na descrição da tarefa ---------------- */
+
+test('descrição da tarefa: lê e-mail, nome, CNPJ e orientação em várias linhas', () => {
+  const { g } = criarAmbiente();
+  const d = g.dadosDaDescricao_([
+    'Observação interna qualquer',
+    '**E-mail do cliente:** [ana@empresa.com.br](mailto:ana@empresa.com.br)',
+    'Nome do cliente: Ana Souza',
+    'CNPJ: 12.345.678/0001-90',
+    'Orientação ao cliente: Enviar comprovante de endereço',
+    'emitido nos últimos 90 dias.',
+    '',
+    'Nota interna: não mostrar',
+    'E-mail: outro@x.com'
+  ].join('\n'), {});
+  assert.equal(d.email, 'ana@empresa.com.br');
+  assert.equal(d.nomeCliente, 'Ana Souza');
+  assert.equal(d.cnpj, '12.345.678/0001-90');
+  assert.equal(d.orientacao, 'Enviar comprovante de endereço\nemitido nos últimos 90 dias.');
+  assert.equal(g.dadosDaDescricao_('Email: sem-arroba', {}).email, '');
+});
+
+test('lista sem campos personalizados: e-mail da descrição, código em comentário, fluxo completo', () => {
+  const amb = ambienteInstalado({}, { campos: [] });
+  amb.clickup.criarTarefa({ id: 't1', name: 'ALTERAÇÃO DE CONTRATO - ECOS', status: 'aguardando documentação', tags: [TAG],
+    descricao: 'E-mail do cliente: teste@ecos.com.br\nNome do cliente: Eduardo\nOrientação ao cliente: Assinar o contrato no gov.br.' });
+  exec(amb, (g) => g.sincronizar_({}));
+  const linha = exec(amb, (g) => g.processoPorTask_('t1'));
+  assert.match(amb.clickup.tasks.t1.comentarios[0], new RegExp(linha.codigo));
+  assert.match(amb.clickup.tasks.t1.comentarios[0], /\?c=ECOS-/);
+  assert.equal(amb.emails.length, 0);
+
+  amb.clickup.mudarStatus('t1', 'exigência');
+  exec(amb, (g) => g.sincronizar_({}));
+  assert.equal(amb.emails.length, 1);
+  assert.equal(amb.emails[0].to, 'teste@ecos.com.br');
+  assert.match(amb.emails[0].htmlBody, /Olá, Eduardo\./);
+  assert.match(amb.emails[0].htmlBody, /Assinar o contrato no gov\.br\./);
+
+  const r = exec(amb, (g) => g.portalConsultar(linha.codigo, 'n'));
+  assert.equal(r.orientacao, 'Assinar o contrato no gov.br.');
+  assert.ok(!JSON.stringify(r).includes('teste@ecos'), 'portal não expõe a descrição');
+
+  const token = loginAdmin(amb);
+  const d = exec(amb, (g) => g.adminGerarNovoCodigo(token, 't1'));
+  assert.equal(amb.clickup.tasks.t1.comentarios.length, 2);
+  assert.match(amb.clickup.tasks.t1.comentarios[1], new RegExp(d.codigo));
+});
+
+test('campo personalizado que recusa gravação (limite do plano) cai para comentário', () => {
+  const amb = ambienteInstalado();
+  amb.clickup.falhas['post /task/t1/field'] = 403;
+  tarefaSocietaria(amb, 't1', 'dbe');
+  exec(amb, (g) => g.sincronizar_({}));
+  const linha = exec(amb, (g) => g.processoPorTask_('t1'));
+  assert.match(amb.clickup.tasks.t1.comentarios[0], new RegExp(linha.codigo));
+});
