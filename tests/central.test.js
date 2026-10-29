@@ -523,3 +523,14 @@ test('campo personalizado que recusa gravação (limite do plano) cai para comen
   const linha = exec(amb, (g) => g.processoPorTask_('t1'));
   assert.match(amb.clickup.tasks.t1.comentarios[0], new RegExp(linha.codigo));
 });
+
+test('limite de tentativas usa janela fixa: insistir não prolonga o bloqueio', () => {
+  const amb = ambienteInstalado();
+  let agora = Date.now();
+  amb.g.agora_ = () => agora;
+  for (let i = 0; i < 3; i++) exec(amb, (g) => g.adminSolicitarCodigo('admin@ecos.com.br'));
+  agora += 10 * 60000;
+  assert.throws(() => exec(amb, (g) => g.adminSolicitarCodigo('admin@ecos.com.br')), /Muitas solicitações/);
+  agora += 5 * 60000 + 1000; // 15 min após o 1º pedido
+  assert.doesNotThrow(() => exec(amb, (g) => g.adminSolicitarCodigo('admin@ecos.com.br')));
+});

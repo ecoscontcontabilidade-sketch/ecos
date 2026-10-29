@@ -176,13 +176,29 @@ function comLock_(fn, esperaMs) {
 function incrementarContador_(chave, janelaSeg) {
   var cache = CacheService.getScriptCache();
   var k = 'rl:' + chave;
-  var atual = parseInt(cache.get(k) || '0', 10) + 1;
-  cache.put(k, String(atual), janelaSeg);
-  return atual;
+  var agora = agora_();
+  var reg = lerRegistroContador_(cache.get(k), agora);
+  if (!reg) reg = { n: 0, fim: agora + janelaSeg * 1000 };
+  reg.n++;
+  // Mantém o fim original da janela: novas tentativas não prolongam o bloqueio.
+  var restante = Math.max(1, Math.ceil((reg.fim - agora) / 1000));
+  cache.put(k, JSON.stringify(reg), restante);
+  return reg.n;
 }
 
 function lerContador_(chave) {
-  return parseInt(CacheService.getScriptCache().get('rl:' + chave) || '0', 10);
+  var reg = lerRegistroContador_(CacheService.getScriptCache().get('rl:' + chave), agora_());
+  return reg ? reg.n : 0;
+}
+
+function lerRegistroContador_(bruto, agora) {
+  if (!bruto) return null;
+  try {
+    var reg = JSON.parse(bruto);
+    return reg && reg.fim > agora ? reg : null;
+  } catch (e) {
+    return null;
+  }
 }
 
 /** Garante que a execução vem do proprietário (editor) ou de um gatilho real. */
