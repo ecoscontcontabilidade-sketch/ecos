@@ -1,0 +1,10 @@
+{
+  "name": "central-processos-ecos",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Central de Processos — Ecos Contabilidade (Google Apps Script + ClickUp)",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "preview": "node tests/preview.js preview"
+  }
+}

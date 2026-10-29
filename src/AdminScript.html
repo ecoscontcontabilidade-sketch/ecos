@@ -1,0 +1,565 @@
+<script>
+(function () {
+  'use strict';
+
+  var $ = function (id) { return document.getElementById(id); };
+  var estado = { token: '', email: '', dados: null, detalhe: null, filtroKpi: '', mensagens: [] };
+
+  /* ---------- Utilidades ---------- */
+
+  function chamar(fn) {
+    var args = Array.prototype.slice.call(arguments, 1);
+    return new Promise(function (resolve, reject) {
+      var r = google.script.run.withSuccessHandler(resolve).withFailureHandler(function (e) {
+        var msg = e && e.message ? e.message : String(e);
+        if (/Sessão expirada|Acesso não autorizado/.test(msg)) encerrarLocal();
+        reject(new Error(msg));
+      });
+      r[fn].apply(r, args);
+    });
+  }
+
+  /** Cria elementos com texto sempre via textContent (nunca HTML de dados). */
+  function h(tag, attrs, filhos) {
+    var el = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (k) {
+      if (k === 'texto') el.textContent = attrs[k];
+      else if (k === 'classe') el.className = attrs[k];
+      else if (k.indexOf('on') === 0) el.addEventListener(k.slice(2), attrs[k]);
+      else if (attrs[k] !== false && attrs[k] !== null && attrs[k] !== undefined) el.setAttribute(k, attrs[k]);
+    });
+    (filhos || []).forEach(function (f) { if (f) el.appendChild(typeof f === 'string' ? document.createTextNode(f) : f); });
+    return el;
+  }
+
+  function mostrar(el, sim) { el.classList.toggle('oculto', !sim); }
+
+  var toastTimer = null;
+  function toast(msg, tipo) {
+    var t = $('toast');
+    t.className = 'toast aviso aviso-' + (tipo || 'ok');
+    t.textContent = msg;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { mostrar(t, false); }, tipo === 'erro' ? 9000 : 4500);
+  }
+
+  function ocupado(botao, sim, texto) {
+    if (!botao) return;
+    if (sim) { botao.dataset.txt = botao.textContent; botao.disabled = true; botao.innerHTML = '<span class="spinner" aria-hidden="true"></span> ' + (texto || 'Aguarde…'); }
+    else { botao.disabled = false; botao.textContent = botao.dataset.txt || botao.textContent; }
+  }
+
+  function confirmar(titulo, texto, rotuloSim) {
+    return new Promise(function (resolve) {
+      var d = $('dialogo');
+      $('dialogoTitulo').textContent = titulo;
+      $('dialogoTexto').textContent = texto;
+      $('dialogoSim').textContent = rotuloSim || 'Confirmar';
+      var fechar = function (v) { d.close(); $('dialogoSim').onclick = null; $('dialogoNao').onclick = null; resolve(v); };
+      $('dialogoSim').onclick = function () { fechar(true); };
+      $('dialogoNao').onclick = function () { fechar(false); };
+      d.oncancel = function () { resolve(false); };
+      if (d.showModal) d.showModal(); else resolve(window.confirm(titulo + '\n\n' + texto));
+    });
+  }
+
+  function chip(grupo, texto) { return h('span', { classe: 'chip chip-' + (grupo || 'fora'), texto: texto }); }
+
+  var NOMES_SITUACAO = { ENVIADO: 'Enviado', ENVIANDO: 'Enviando', FALHOU: 'Falhou', SEM_EMAIL: 'Sem e-mail', DESATIVADA: 'Desativada', VERIFICAR: 'Verificar' };
+  function tagSituacao(s) {
+    if (!s) return h('span', { classe: 'sub', texto: '—' });
+    var cls = s === 'ENVIADO' ? 'tag-ok' : (s === 'FALHOU' || s === 'VERIFICAR') ? 'tag-erro' : 'tag-pend';
+    return h('span', { classe: cls, texto: NOMES_SITUACAO[s] || s, title: s === 'ENVIADO' ? 'Aceito pelo serviço de e-mail (não confirma entrega)' : '' });
+  }
+
+  /* ---------- Sessão ---------- */
+
+  function salvarSessao() { try { sessionStorage.setItem('ecosAdmin', JSON.stringify({ t: estado.token, e: estado.email })); } catch (e) { /* memória */ } }
+  function lerSessao() { try { var s = JSON.parse(sessionStorage.getItem('ecosAdmin') || 'null'); if (s) { estado.token = s.t; estado.email = s.e; } } catch (e) { /* nada */ } }
+  function encerrarLocal() {
+    estado.token = ''; estado.email = '';
+    try { sessionStorage.removeItem('ecosAdmin'); } catch (e) { /* nada */ }
+    fecharPainel();
+    mostrarLogin();
+  }
+
+  function mostrarLogin() {
+    ['telaProcessos', 'telaMensagens', 'telaConfig', 'abas', 'areaUsuario'].forEach(function (id) { mostrar($(id), false); });
+    mostrar($('telaLogin'), true);
+    mostrar($('formEmail'), true);
+    mostrar($('formCodigo'), false);
+    $('loginEmail').focus();
+  }
+
+  function erroLogin(msg) { $('erroLogin').textContent = msg || ''; mostrar($('erroLogin'), !!msg); }
+
+  $('formEmail').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    erroLogin('');
+    var email = $('loginEmail').value.trim();
+    if (!email) { erroLogin('Informe seu e-mail.'); return; }
+    ocupado($('btnPedirCodigo'), true, 'Enviando…');
+    chamar('adminSolicitarCodigo', email).then(function (r) {
+      $('msgCodigo').textContent = r.mensagem;
+      mostrar($('formEmail'), false);
+      mostrar($('formCodigo'), true);
+      $('loginCodigo').focus();
+    }).catch(function (e) { erroLogin(e.message); }).then(function () { ocupado($('btnPedirCodigo'), false); });
+  });
+
+  $('formCodigo').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    erroLogin('');
+    ocupado($('btnValidar'), true, 'Validando…');
+    chamar('adminValidarCodigo', $('loginEmail').value.trim(), $('loginCodigo').value.trim()).then(function (r) {
+      estado.token = r.token; estado.email = r.email;
+      salvarSessao();
+      $('loginCodigo').value = '';
+      iniciarApp();
+    }).catch(function (e) { erroLogin(e.message); }).then(function () { ocupado($('btnValidar'), false); });
+  });
+
+  $('btnVoltarEmail').addEventListener('click', function () { mostrar($('formCodigo'), false); mostrar($('formEmail'), true); erroLogin(''); });
+  $('btnSair').addEventListener('click', function () { chamar('adminSair', estado.token).catch(function () {}); encerrarLocal(); });
+
+  /* ---------- Abas ---------- */
+
+  function abrirAba(nome) {
+    Array.prototype.forEach.call(document.querySelectorAll('.aba'), function (b) { b.setAttribute('aria-selected', String(b.dataset.aba === nome)); });
+    mostrar($('telaProcessos'), nome === 'processos');
+    mostrar($('telaMensagens'), nome === 'mensagens');
+    mostrar($('telaConfig'), nome === 'config');
+    if (nome === 'mensagens') carregarMensagens();
+    if (nome === 'config') carregarConfig();
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('.aba'), function (b) { b.addEventListener('click', function () { abrirAba(b.dataset.aba); }); });
+
+  function iniciarApp() {
+    mostrar($('telaLogin'), false);
+    mostrar($('abas'), true);
+    mostrar($('areaUsuario'), true);
+    $('usuarioEmail').textContent = estado.email;
+    abrirAba('processos');
+    carregarResumo();
+  }
+
+  /* ---------- Processos ---------- */
+
+  function carregarResumo() {
+    var b = $('btnAtualizar');
+    ocupado(b, true, 'Atualizando…');
+    $('infoSync').textContent = 'Consultando o ClickUp…';
+    return chamar('adminResumo', estado.token).then(function (d) {
+      estado.dados = d;
+      montarFiltros(d);
+      renderKpis(d);
+      renderTabela();
+      renderSemAcomp(d);
+      $('infoSync').textContent = 'Dados do ClickUp em ' + d.geradoEm + ' · Última sincronização automática: ' + (d.ultimaSincronizacao || '—');
+      var avisos = [];
+      if (d.aviso) avisos.push(d.aviso);
+      if (d.ultimoErroSync) avisos.push('Último erro de sincronização: ' + d.ultimoErroSync);
+      $('avisoPainel').textContent = avisos.join(' ');
+      mostrar($('avisoPainel'), avisos.length > 0);
+    }).catch(function (e) {
+      $('infoSync').textContent = '';
+      toast(e.message, 'erro');
+    }).then(function () { ocupado(b, false); });
+  }
+  $('btnAtualizar').addEventListener('click', carregarResumo);
+
+  function montarFiltros(d) {
+    var fs = $('fStatus'), atual = fs.value;
+    fs.length = 1;
+    d.etapas.forEach(function (e) { fs.appendChild(h('option', { value: e.key, texto: e.nome })); });
+    fs.appendChild(h('option', { value: '__fora', texto: 'Fora do fluxo' }));
+    fs.value = atual;
+    var fr = $('fResp'), atualR = fr.value;
+    fr.length = 1;
+    d.porResponsavel.forEach(function (r) { fr.appendChild(h('option', { value: r.nome, texto: r.nome + ' (' + r.total + ')' })); });
+    fr.value = atualR;
+    $('nomeTag').textContent = d.tag;
+  }
+
+  var KPIS = [
+    ['ativos', 'Processos ativos'], ['aguardando', 'Aguardando documentação'], ['andamento', 'Em andamento'],
+    ['exigencia', 'Com exigência', true], ['deferidos', 'Deferidos'], ['semAtualizacao', 'Sem atualização recente', true],
+    ['semEmail', 'Sem e-mail do cliente', true], ['falhasNotificacao', 'Falhas de notificação', true]
+  ];
+
+  function renderKpis(d) {
+    var box = $('kpis');
+    box.textContent = '';
+    KPIS.forEach(function (k) {
+      var v = d.kpi[k[0]] || 0;
+      box.appendChild(h('button', {
+        type: 'button', classe: 'kpi' + (k[2] && v ? ' is-alerta' : ''), 'aria-pressed': String(estado.filtroKpi === k[0]),
+        onclick: function () { estado.filtroKpi = estado.filtroKpi === k[0] ? '' : k[0]; renderKpis(d); renderTabela(); }
+      }, [h('div', { classe: 'kpi-valor', texto: String(v) }), h('div', { classe: 'kpi-rotulo', texto: k[1] })]));
+    });
+    var pr = $('porResp');
+    pr.textContent = '';
+    if (d.porResponsavel.length) {
+      pr.appendChild(h('span', { texto: 'Ativos por responsável:' }));
+      d.porResponsavel.forEach(function (r) { pr.appendChild(h('span', { classe: 'item', texto: r.nome + ' · ' + r.total })); });
+    }
+  }
+
+  function filtrar() {
+    var d = estado.dados;
+    if (!d) return [];
+    var busca = $('fBusca').value.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    var buscaNum = busca.replace(/\D/g, '');
+    var st = $('fStatus').value, resp = $('fResp').value, campoData = $('fCampoData').value;
+    var de = $('fDe').value ? new Date($('fDe').value + 'T00:00:00').getTime() : 0;
+    var ate = $('fAte').value ? new Date($('fAte').value + 'T23:59:59').getTime() : 0;
+    var pend = $('fPendencia').checked, parados = $('fParados').checked, encerrados = $('fEncerrados').checked;
+    var k = estado.filtroKpi;
+
+    return d.processos.filter(function (p) {
+      var encerrado = p.grupo === 'deferido' || p.grupo === 'fechado';
+      if (k) {
+        if (k === 'ativos' && encerrado) return false;
+        if (k === 'aguardando' && p.grupo !== 'aguardando') return false;
+        if (k === 'andamento' && p.grupo !== 'andamento') return false;
+        if (k === 'exigencia' && p.grupo !== 'exigencia') return false;
+        if (k === 'deferidos' && p.grupo !== 'deferido') return false;
+        if (k === 'semAtualizacao' && !p.semAtualizacao) return false;
+        if (k === 'semEmail' && (p.temEmail || encerrado)) return false;
+        if (k === 'falhasNotificacao' && !(p.notificacao && p.notificacao.situacao === 'FALHOU')) return false;
+      } else if (!encerrados && encerrado && st !== 'DEFERIDO') return false;
+      if (busca) {
+        var alvo = [p.empresa, p.processo, p.nome, p.codigo].join(' ').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+        var cnpj = String(p.cnpj || '').replace(/\D/g, '');
+        if (alvo.indexOf(busca) < 0 && !(buscaNum.length >= 4 && cnpj.indexOf(buscaNum) >= 0)) return false;
+      }
+      if (st === '__fora' && p.statusKey) return false;
+      if (st && st !== '__fora' && p.statusKey !== st) return false;
+      if (resp && p.responsaveis.indexOf(resp) < 0) return false;
+      if (de && (p[campoData] || 0) < de) return false;
+      if (ate && (p[campoData] || 0) > ate) return false;
+      if (pend && !p.pendencia) return false;
+      if (parados && !p.semAtualizacao) return false;
+      return true;
+    }).sort(function (a, b) { return (b.atualizadoEm || 0) - (a.atualizadoEm || 0); });
+  }
+
+  function renderTabela() {
+    var lista = filtrar();
+    var tb = $('corpoTabela');
+    tb.textContent = '';
+    lista.forEach(function (p) {
+      var pend = [];
+      if (p.grupo === 'exigencia') pend.push(h('span', { classe: 'tag-pend', texto: 'Exigência' }));
+      if (!p.temEmail) pend.push(h('span', { classe: 'tag-pend', texto: 'Sem e-mail' }));
+      if (p.semAtualizacao) pend.push(h('span', { classe: 'tag-pend', texto: 'Parado' }));
+      if (!p.statusKey) pend.push(h('span', { classe: 'tag-pend', texto: 'Status fora do fluxo' }));
+      var tr = h('tr', { tabindex: '0', onclick: function () { abrirDetalhe(p.taskId); },
+        onkeydown: function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrirDetalhe(p.taskId); } } }, [
+        h('td', {}, [h('div', { classe: 'empresa', texto: p.empresa }), h('div', { classe: 'sub', texto: p.processo + (p.codigo ? ' · ' + p.codigo : '') })]),
+        h('td', { 'data-rot': 'Status' }, [chip(p.grupo, p.status)]),
+        h('td', { 'data-rot': 'Responsável', texto: p.responsaveis.join(', ') || '—' }),
+        h('td', { 'data-rot': 'Atualização', texto: p.atualizadoTexto || '—' }),
+        h('td', { 'data-rot': 'Pendências' }, pend.length ? pend : [h('span', { classe: 'sub', texto: '—' })]),
+        h('td', { 'data-rot': 'Notificação' }, [tagSituacao(p.notificacao && p.notificacao.situacao), p.notificacao ? h('div', { classe: 'sub', texto: p.notificacao.data }) : null])
+      ]);
+      tb.appendChild(tr);
+    });
+    mostrar($('vazio'), lista.length === 0);
+    $('contagem').textContent = lista.length + ' de ' + (estado.dados ? estado.dados.processos.length : 0) + ' processos';
+  }
+
+  ['fBusca', 'fStatus', 'fResp', 'fCampoData', 'fDe', 'fAte', 'fPendencia', 'fParados', 'fEncerrados'].forEach(function (id) {
+    $(id).addEventListener(id === 'fBusca' ? 'input' : 'change', renderTabela);
+  });
+  $('btnLimpar').addEventListener('click', function () {
+    ['fBusca', 'fStatus', 'fResp', 'fDe', 'fAte'].forEach(function (id) { $(id).value = ''; });
+    ['fPendencia', 'fParados', 'fEncerrados'].forEach(function (id) { $(id).checked = false; });
+    estado.filtroKpi = '';
+    if (estado.dados) renderKpis(estado.dados);
+    renderTabela();
+  });
+
+  function renderSemAcomp(d) {
+    $('qtdSemAcomp').textContent = d.semAcompanhamento.length;
+    var ul = $('listaSemAcomp');
+    ul.textContent = '';
+    d.semAcompanhamento.forEach(function (t) {
+      var btn = h('button', { type: 'button', classe: 'botao botao-secundario botao-pequeno', texto: 'Ativar acompanhamento' });
+      btn.addEventListener('click', function () {
+        confirmar('Ativar acompanhamento?', 'A etiqueta "' + d.tag + '" será adicionada à tarefa "' + t.nome + '" no ClickUp. O processo passará a ter código de acompanhamento e o cliente receberá e-mails nas próximas mudanças de status.', 'Ativar')
+          .then(function (ok) {
+            if (!ok) return;
+            ocupado(btn, true, 'Ativando…');
+            chamar('adminAtivarAcompanhamento', estado.token, t.taskId).then(function (det) {
+              toast('Acompanhamento ativado.');
+              carregarResumo().then(function () { mostrarDetalhe(det); });
+            }).catch(function (e) { toast(e.message, 'erro'); ocupado(btn, false); });
+          });
+      });
+      ul.appendChild(h('li', {}, [h('span', {}, [h('strong', { texto: t.nome }), h('div', { classe: 'sub', texto: 'Status no ClickUp: ' + t.status + ' · ' + t.atualizadoTexto })]), btn]));
+    });
+  }
+
+  /* ---------- Detalhe ---------- */
+
+  function fecharPainel() { mostrar($('painel'), false); mostrar($('painelFundo'), false); estado.detalhe = null; }
+  $('btnFecharPainel').addEventListener('click', fecharPainel);
+  $('painelFundo').addEventListener('click', fecharPainel);
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !$('painel').classList.contains('oculto') && !$('dialogo').open) fecharPainel(); });
+
+  function abrirDetalhe(taskId) {
+    mostrar($('painel'), true);
+    mostrar($('painelFundo'), true);
+    $('dEmpresa').textContent = 'Carregando…';
+    $('dProcesso').textContent = '';
+    $('painelCorpo').textContent = '';
+    $('painelCorpo').appendChild(h('div', { classe: 'sub' }, [h('span', { classe: 'spinner' }), ' Consultando o ClickUp…']));
+    chamar('adminDetalhe', estado.token, taskId).then(mostrarDetalhe).catch(function (e) {
+      $('painelCorpo').textContent = '';
+      $('painelCorpo').appendChild(h('div', { classe: 'aviso aviso-erro', texto: e.message }));
+    });
+  }
+
+  function secao(titulo, filhos) {
+    return h('section', { classe: 'cartao' }, [h('h3', { texto: titulo, style: 'margin-bottom:12px;font-size:17px' })].concat(filhos));
+  }
+
+  function linhaInfo(rot, val) { return h('div', {}, [h('div', { classe: 'rot', texto: rot }), h('div', { texto: val || '—' })]); }
+
+  function mostrarDetalhe(d) {
+    estado.detalhe = d;
+    mostrar($('painel'), true);
+    mostrar($('painelFundo'), true);
+    $('dEmpresa').textContent = d.empresa;
+    $('dProcesso').textContent = d.processo + (d.codigo ? ' · ' + d.codigo : '');
+    var corpo = $('painelCorpo');
+    corpo.textContent = '';
+
+    if (d.camposAusentes && d.camposAusentes.length) {
+      corpo.appendChild(h('div', { classe: 'aviso aviso-info', texto: 'Campos personalizados não encontrados na lista do ClickUp (apenas o e-mail é indispensável): ' + d.camposAusentes.join(', ') + '.' }));
+    }
+    if (!d.acompanhamento) {
+      corpo.appendChild(h('div', { classe: 'aviso aviso-atencao', texto: 'Este processo não está em acompanhamento do cliente (sem a etiqueta configurada).' }));
+    }
+
+    // Status
+    var sel = h('select', { classe: 'entrada', id: 'novoStatus', 'aria-label': 'Novo status' });
+    (estado.dados ? estado.dados.etapas : []).forEach(function (e) {
+      sel.appendChild(h('option', { value: e.key, texto: e.nome, selected: e.key === d.statusKey ? 'selected' : null }));
+    });
+    var btnStatus = h('button', { type: 'button', classe: 'botao botao-primario', texto: 'Alterar status', disabled: d.acompanhamento ? null : 'disabled' });
+    btnStatus.addEventListener('click', function () {
+      var novo = sel.value;
+      var nomeNovo = sel.options[sel.selectedIndex].text;
+      if (novo === d.statusKey) { toast('O processo já está neste status.', 'info'); return; }
+      confirmar('Alterar status para "' + nomeNovo + '"?',
+        'O status será atualizado na tarefa do ClickUp' + (d.temEmail ? ' e o cliente (' + d.emailMascarado + ') receberá um e-mail.' : '. O processo não tem e-mail válido: nenhum e-mail será enviado.'),
+        'Alterar status').then(function (ok) {
+        if (!ok) return;
+        ocupado(btnStatus, true, 'Atualizando no ClickUp…');
+        chamar('adminAlterarStatus', estado.token, d.taskId, novo, d.statusClickUp).then(function (nd) {
+          var notif = nd.notificacoes && nd.notificacoes[0] && nd.notificacoes[0].status === nd.status ? nd.notificacoes[0] : null;
+          var txt = 'Status confirmado no ClickUp: ' + nd.status + '.';
+          if (notif && notif.situacao === 'ENVIADO') txt += ' E-mail enviado ao cliente.';
+          else if (notif && notif.situacao === 'SEM_EMAIL') txt += ' Atenção: processo sem e-mail; nenhuma notificação enviada.';
+          else if (notif && notif.situacao === 'FALHOU') txt += ' Atenção: o e-mail falhou (' + notif.erro + '). Use "Reenviar".';
+          toast(txt, notif && notif.situacao !== 'ENVIADO' ? 'atencao' : 'ok');
+          mostrarDetalhe(nd);
+          carregarResumo();
+        }).catch(function (e) {
+          toast(e.message, 'erro');
+          ocupado(btnStatus, false);
+        });
+      });
+    });
+
+    corpo.appendChild(secao('Status', [
+      h('div', { style: 'display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px' }, [
+        chip(d.grupo, d.status), h('span', { classe: 'sub', texto: 'No ClickUp: "' + d.statusClickUp + '" · atualizado em ' + (d.atualizadoTexto || '—') })
+      ]),
+      h('div', { classe: 'linha-acao' }, [h('div', { classe: 'campo' }, [h('label', { for: 'novoStatus', texto: 'Novo status' }), sel]), btnStatus])
+    ]));
+
+    // Orientação ao cliente
+    if (d.temCampoOrientacao) {
+      var ta = h('textarea', { classe: 'entrada', id: 'orientacao', maxlength: '2000' });
+      ta.value = d.orientacao || '';
+      var btnOri = h('button', { type: 'button', classe: 'botao botao-secundario', texto: 'Salvar orientação' });
+      btnOri.addEventListener('click', function () {
+        ocupado(btnOri, true, 'Salvando…');
+        chamar('adminSalvarOrientacao', estado.token, d.taskId, ta.value).then(function (nd) {
+          toast('Orientação salva no ClickUp.'); mostrarDetalhe(nd);
+        }).catch(function (e) { toast(e.message, 'erro'); ocupado(btnOri, false); });
+      });
+      corpo.appendChild(secao('Orientação ao cliente', [
+        h('p', { classe: 'dica', texto: 'Exibida ao cliente somente enquanto o status for "Exigência". Escreva apenas o que foi autorizado pela equipe.', style: 'margin-bottom:8px' }),
+        ta, h('div', { style: 'margin-top:10px' }, [btnOri])
+      ]));
+    }
+
+    // Acompanhamento do cliente
+    if (d.codigo) {
+      var btnCopiar = h('button', { type: 'button', classe: 'botao botao-secundario botao-pequeno', texto: 'Copiar link do cliente' });
+      btnCopiar.addEventListener('click', function () {
+        var ok = function () { toast('Link copiado.'); };
+        if (navigator.clipboard) navigator.clipboard.writeText(d.linkPublico).then(ok, function () { window.prompt('Copie o link:', d.linkPublico); });
+        else window.prompt('Copie o link:', d.linkPublico);
+      });
+      var btnNovo = h('button', { type: 'button', classe: 'botao botao-perigo botao-pequeno', texto: 'Gerar novo código' });
+      btnNovo.addEventListener('click', function () {
+        confirmar('Gerar novo código?', 'O código atual deixará de funcionar imediatamente. Envie o novo link ao cliente.', 'Gerar novo código').then(function (ok) {
+          if (!ok) return;
+          ocupado(btnNovo, true, 'Gerando…');
+          chamar('adminGerarNovoCodigo', estado.token, d.taskId).then(function (nd) { toast('Novo código gerado.'); mostrarDetalhe(nd); carregarResumo(); })
+            .catch(function (e) { toast(e.message, 'erro'); ocupado(btnNovo, false); });
+        });
+      });
+      corpo.appendChild(secao('Acompanhamento do cliente', [
+        h('div', { classe: 'grade-info' }, [linhaInfo('Código', d.codigo), linhaInfo('E-mail do cliente', d.temEmail ? d.emailMascarado : 'Não cadastrado'), linhaInfo('Nome do cliente', d.nomeCliente)]),
+        h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin-top:14px' }, [d.linkPublico ? btnCopiar : null, btnNovo,
+          d.url ? h('a', { classe: 'botao botao-secundario botao-pequeno', href: d.url, target: '_blank', rel: 'noopener', texto: 'Abrir no ClickUp' }) : null])
+      ]));
+    }
+
+    // Linha do tempo
+    var ol = h('ol', { classe: 'tl' });
+    (d.etapas || []).forEach(function (et, i) {
+      ol.appendChild(h('li', { classe: 'tl-item is-' + et.estado }, [
+        h('span', { classe: 'tl-marca', texto: et.estado === 'concluida' ? '✓' : et.estado === 'atencao' ? '!' : et.estado === 'nao_ocorreu' ? '–' : String(i + 1) }),
+        h('div', {}, [h('p', { classe: 'tl-nome', texto: et.nome }), h('p', { classe: 'tl-info', texto: et.dataTexto || '' })])
+      ]));
+    });
+    corpo.appendChild(secao('Linha do tempo (visão do cliente)', [ol]));
+
+    // Notificações
+    var tbN = h('tbody');
+    (d.notificacoes || []).forEach(function (n) {
+      var acoes = null;
+      if (n.podeReenviar) {
+        acoes = h('button', { type: 'button', classe: 'botao botao-secundario botao-pequeno', texto: 'Reenviar' });
+        acoes.addEventListener('click', function () {
+          var jaEnviado = n.situacao === 'ENVIADO' || n.situacao === 'VERIFICAR' || n.situacao === 'ENVIANDO';
+          var pergunta = jaEnviado ? confirmar('Reenviar notificação?', 'Esta notificação consta como "' + (NOMES_SITUACAO[n.situacao] || n.situacao) + '". O cliente pode receber o mesmo e-mail novamente.', 'Reenviar mesmo assim') : Promise.resolve(true);
+          pergunta.then(function (ok) {
+            if (!ok) return;
+            ocupado(acoes, true, 'Enviando…');
+            chamar('adminReenviarNotificacao', estado.token, d.taskId, n.id, jaEnviado).then(function (nd) {
+              toast(nd.resultado && nd.resultado.situacao === 'ENVIADO' ? 'E-mail reenviado.' : 'Reenvio falhou: ' + (nd.resultado ? nd.resultado.erro : ''), nd.resultado && nd.resultado.situacao === 'ENVIADO' ? 'ok' : 'erro');
+              mostrarDetalhe(nd); carregarResumo();
+            }).catch(function (e) { toast(e.message, 'erro'); ocupado(acoes, false); });
+          });
+        });
+      }
+      tbN.appendChild(h('tr', {}, [
+        h('td', { texto: n.criadoEm }), h('td', { texto: n.status }), h('td', { texto: n.destinatario || '—' }),
+        h('td', {}, [tagSituacao(n.situacao), n.erro ? h('div', { classe: 'sub', texto: n.erro }) : null]),
+        h('td', { texto: String(n.tentativas || 0) }), h('td', {}, [acoes])
+      ]));
+    });
+    corpo.appendChild(secao('Notificações por e-mail', (d.notificacoes || []).length ? [
+      h('div', { style: 'overflow-x:auto' }, [h('table', { classe: 'mini-tabela' }, [
+        h('thead', {}, [h('tr', {}, ['Criada', 'Status', 'Destinatário', 'Situação', 'Tentativas', ''].map(function (t) { return h('th', { texto: t }); }))]), tbN])]),
+      h('p', { classe: 'dica', style: 'margin-top:8px', texto: '"Enviado" significa que o e-mail foi aceito pelo serviço de envio; não confirma a entrega na caixa do cliente.' })
+    ] : [h('p', { classe: 'sub', texto: 'Nenhuma notificação registrada.' })]));
+
+    // Histórico
+    var ul = h('ul', { classe: 'hist' });
+    (d.eventos || []).forEach(function (e) {
+      var titulo = e.tipo === 'STATUS_ALTERADO' ? 'Status: ' + (e.de || '—') + ' → ' + e.para : e.tipo.replace(/_/g, ' ').toLowerCase().replace(/^./, function (c) { return c.toUpperCase(); });
+      ul.appendChild(h('li', {}, [
+        h('div', { classe: 'quando', texto: e.dataHora + ' · ' + e.origem + (e.usuario ? ' · ' + e.usuario : '') }),
+        h('div', { texto: titulo }),
+        e.detalhe || e.notificacao || e.sync ? h('div', { classe: 'sub', texto: [e.sync ? 'Sincronização: ' + e.sync : '', e.notificacao ? 'Notificação: ' + e.notificacao : '', e.detalhe].filter(String).join(' · ') }) : null
+      ]));
+    });
+    corpo.appendChild(secao('Histórico', (d.eventos || []).length ? [ul] : [h('p', { classe: 'sub', texto: 'Sem eventos registrados.' })]));
+
+    // Dados do processo
+    corpo.appendChild(secao('Dados do processo', [
+      h('div', { classe: 'grade-info' }, [
+        linhaInfo('Tarefa no ClickUp', d.nome), linhaInfo('CNPJ', d.cnpj), linhaInfo('Responsáveis', d.responsaveis.join(', ')),
+        linhaInfo('Criado em', d.criadoTexto), linhaInfo('Prazo', d.prazoTexto), linhaInfo('Última atualização', d.atualizadoTexto)
+      ]),
+      d.descricao ? h('div', { style: 'margin-top:14px;white-space:pre-line;font-size:14px' }, [h('div', { classe: 'rot sub', texto: 'Descrição (interna)' }), d.descricao]) : null
+    ]));
+
+    $('dEmpresa').focus();
+  }
+
+  /* ---------- Mensagens ---------- */
+
+  function carregarMensagens() {
+    var box = $('listaMensagens');
+    box.textContent = 'Carregando…';
+    chamar('adminObterMensagens', estado.token).then(renderMensagens).catch(function (e) { box.textContent = ''; toast(e.message, 'erro'); });
+  }
+
+  function renderMensagens(lista) {
+    estado.mensagens = lista;
+    var box = $('listaMensagens');
+    box.textContent = '';
+    lista.forEach(function (m) {
+      var idb = 'm_' + m.chave;
+      box.appendChild(h('div', { classe: 'cartao msg-status' }, [
+        h('h3', { texto: m.status, style: 'font-size:17px' }),
+        h('div', { classe: 'campo' }, [h('label', { for: idb + '_t', texto: 'Título do e-mail' }), h('input', { classe: 'entrada', id: idb + '_t', maxlength: '120', value: m.tituloEmail })]),
+        h('div', { classe: 'campo' }, [h('label', { for: idb + '_m', texto: 'Mensagem (portal e e-mail)' }), (function () { var t = h('textarea', { classe: 'entrada', id: idb + '_m', maxlength: '1500' }); t.value = m.mensagem; return t; })()]),
+        m.chave === 'DEFERIDO' ? h('div', { classe: 'campo' }, [h('label', { for: idb + '_p', texto: 'Próximos passos (exibido em Deferido)' }), (function () { var t = h('textarea', { classe: 'entrada', id: idb + '_p', maxlength: '1500' }); t.value = m.proximosPassos || ''; return t; })()]) : null
+      ]));
+    });
+  }
+
+  $('btnSalvarMsgs').addEventListener('click', function () {
+    var b = $('btnSalvarMsgs');
+    var lista = estado.mensagens.map(function (m) {
+      var idb = 'm_' + m.chave;
+      return { chave: m.chave, tituloEmail: $(idb + '_t').value, mensagem: $(idb + '_m').value, proximosPassos: $(idb + '_p') ? $(idb + '_p').value : '' };
+    });
+    ocupado(b, true, 'Salvando…');
+    chamar('adminSalvarMensagens', estado.token, lista).then(function (r) { renderMensagens(r); toast('Mensagens salvas.'); })
+      .catch(function (e) { toast(e.message, 'erro'); }).then(function () { ocupado(b, false); });
+  });
+
+  /* ---------- Configuração ---------- */
+
+  function carregarConfig() {
+    var box = $('conteudoConfig');
+    box.textContent = 'Carregando diagnóstico…';
+    chamar('adminDiagnostico', estado.token).then(function (d) {
+      box.textContent = '';
+      if (d.problemas.length) box.appendChild(h('div', { classe: 'aviso aviso-atencao', style: 'margin-bottom:16px' }, [h('strong', { texto: 'Pendências: ' }), d.problemas.join(' ')]));
+      else box.appendChild(h('div', { classe: 'aviso aviso-ok', style: 'margin-bottom:16px', texto: 'Configuração sem pendências.' }));
+      var itens = [
+        ['Versão', d.versao], ['Token do ClickUp', d.tokenConfigurado ? 'Configurado (oculto)' : 'NÃO configurado'],
+        ['Workspace ID', d.workspaceId], ['Space ID', d.spaceId], ['Folder ID', d.folderId || '(lista sem pasta)'], ['List ID', d.listId],
+        ['Lista', d.lista ? d.lista.nome + ' — ' + d.lista.space : '—'], ['Etiqueta de acompanhamento', d.tag],
+        ['Status ausentes no ClickUp', d.statusFaltando.join(', ') || 'nenhum'], ['Status fora do fluxo (ignorados)', d.statusExtras.join(', ') || 'nenhum'],
+        ['Campos encontrados', d.camposEncontrados.join(', ') || 'nenhum'], ['Campos ausentes', d.camposFaltando.join(', ') || 'nenhum'],
+        ['URL do portal', d.appUrl], ['Nome de exibição', d.nomeExibicao], ['WhatsApp', d.whatsapp], ['E-mail de contato', d.contatoEmail],
+        ['Sincronização', 'a cada ' + d.syncMinutos + ' min · última: ' + (d.ultimaSincronizacao || '—')], ['Reconciliação completa', d.ultimaReconciliacao || '—'],
+        ['Último erro de sincronização', d.ultimoErroSync || 'nenhum'], ['Gatilhos instalados', d.gatilhos.join(', ') || 'nenhum'],
+        ['Notificações', d.notificacoesAtivas ? 'ativas' : 'DESATIVADAS'], ['Cota de e-mails restante hoje', String(d.cotaEmailRestante)],
+        ['Sem atualização após', d.diasSemAtualizacao + ' dias'], ['Retenção do histórico', d.retencaoDias + ' dias'], ['Administradores', String(d.administradores)]
+      ];
+      var dl = h('dl', { classe: 'config-lista' });
+      itens.forEach(function (i) { dl.appendChild(h('dt', { texto: i[0] })); dl.appendChild(h('dd', { texto: i[1] || '—' })); });
+      box.appendChild(dl);
+    }).catch(function (e) { box.textContent = ''; toast(e.message, 'erro'); });
+  }
+
+  function sincronizar(completa, botao) {
+    ocupado(botao, true, 'Sincronizando…');
+    chamar('adminSincronizar', estado.token, completa).then(function (r) {
+      toast('Sincronização concluída: ' + r.tarefas + ' tarefas lidas, ' + r.mudancas + ' mudanças, ' + r.novos + ' novos processos.');
+      carregarConfig();
+    }).catch(function (e) { toast(e.message, 'erro'); }).then(function () { ocupado(botao, false); });
+  }
+  $('btnSyncAgora').addEventListener('click', function () { sincronizar(false, $('btnSyncAgora')); });
+  $('btnReconciliar').addEventListener('click', function () { sincronizar(true, $('btnReconciliar')); });
+
+  /* ---------- Início ---------- */
+  lerSessao();
+  if (estado.token) iniciarApp(); else mostrarLogin();
+})();
+</script>

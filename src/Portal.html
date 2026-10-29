@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <?!= include_('Styles'); ?>
+  <style>
+    .hero { display: grid; grid-template-columns: 1.1fr 1fr; gap: 40px; align-items: center; padding: 40px 0 56px; }
+    .hero h1 { font-family: var(--fonte-display); font-weight: 500; font-size: clamp(34px, 5vw, 50px); letter-spacing: -.01em; margin: 14px 0 12px; }
+    .hero .sub { font-size: 18px; color: var(--cor-texto-suave); max-width: 520px; }
+    .etapas-mini { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 26px; }
+    .etapas-mini span { font-size: 12px; font-family: var(--fonte-dados); padding: 4px 10px; border-radius: 999px; background: var(--ecos-nevoa); color: var(--ecos-floresta); }
+    .form-consulta { display: flex; flex-direction: column; gap: 16px; }
+    .form-consulta .entrada { font-family: var(--fonte-dados); font-size: 18px; letter-spacing: .06em; text-transform: uppercase; padding: 14px 16px; }
+    .form-consulta .botao { width: 100%; padding: 14px 20px; }
+    .resultado { display: grid; grid-template-columns: 1.15fr 1fr; gap: 24px; align-items: start; padding-top: 8px; }
+    .resumo-topo { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px 24px; align-items: flex-start; }
+    .resumo-topo h2 { font-size: 24px; }
+    .resumo-proc { color: var(--cor-texto-suave); margin-top: 4px; }
+    .metas { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--cor-linha); }
+    .meta-rotulo { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--cor-texto-suave); font-family: var(--fonte-dados); }
+    .meta-valor { font-weight: 600; margin-top: 2px; }
+    .mensagem-status { margin-top: 20px; padding: 16px 18px; border-radius: var(--raio-sm); background: var(--ecos-nevoa); color: var(--ecos-floresta); }
+    .mensagem-status.is-exigencia { background: var(--cor-alerta-fundo); color: #4D3C0E; border-left: 4px solid var(--ecos-bronze); }
+    .mensagem-status.is-deferido { background: var(--ecos-floresta); color: var(--ecos-areia); }
+    .bloco-titulo { font-family: var(--fonte-titulo); font-weight: 700; font-size: 15px; margin-bottom: 6px; }
+    .bloco-extra { margin-top: 14px; padding: 14px 16px; border-radius: var(--raio-sm); border: 1px dashed var(--cor-linha); }
+    .bloco-extra p, #resMensagemTexto { white-space: pre-line; }
+    .contato { display: flex; flex-direction: column; gap: 12px; }
+    .contato .botao { width: 100%; }
+    .contato-linha { font-size: 14px; color: var(--cor-texto-suave); }
+    .coluna { display: flex; flex-direction: column; gap: 24px; }
+    .acoes-topo { display: flex; justify-content: space-between; align-items: center; margin: 8px 0 18px; gap: 12px; flex-wrap: wrap; }
+    @media (max-width: 860px) {
+      .hero, .resultado { grid-template-columns: 1fr; }
+      .hero { padding: 16px 0 40px; gap: 28px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topo">
+    <span class="marca" id="marca">
+      <img id="logo" alt="" class="oculto">
+      <span>
+        <span class="marca-texto" id="marcaNome" style="display:block"><?= nomeExibicao ?></span>
+        <span class="marca-sub">Central de Processos</span>
+      </span>
+    </span>
+  </header>
+
+  <main class="conteudo" id="app" data-codigo="<?= codigoInicial ?>">
+    <!-- Consulta -->
+    <section id="telaConsulta" class="hero" aria-labelledby="tituloConsulta">
+      <div>
+        <span class="kicker">Acompanhamento societário</span>
+        <h1 id="tituloConsulta">Acompanhe seu processo</h1>
+        <p class="sub">Consulte o andamento da sua solicitação de forma simples e transparente.</p>
+        <div class="etapas-mini" id="etapasMini" aria-hidden="true"></div>
+      </div>
+      <form class="cartao form-consulta" id="formConsulta" novalidate>
+        <div class="campo">
+          <label for="codigo">Código de acompanhamento</label>
+          <input id="codigo" name="codigo" class="entrada" autocomplete="off" autocapitalize="characters" spellcheck="false"
+                 inputmode="text" maxlength="24" placeholder="ECOS-XXXX-XXXX-XXXX" aria-describedby="dicaCodigo erroConsulta" required>
+          <span class="dica" id="dicaCodigo">O código está no e-mail de acompanhamento enviado pela nossa equipe.</span>
+        </div>
+        <div id="erroConsulta" class="aviso aviso-erro oculto" role="alert"></div>
+        <button class="botao botao-primario" type="submit" id="btnConsultar">Consultar processo</button>
+        <p class="dica">Não tem o código? Fale com a nossa equipe pelo <a href="#" id="linkWhatsSemCodigo" target="_blank" rel="noopener">WhatsApp</a>.</p>
+      </form>
+    </section>
+
+    <!-- Resultado -->
+    <section id="telaResultado" class="oculto" aria-live="polite">
+      <div class="acoes-topo">
+        <button type="button" class="botao botao-secundario botao-pequeno" id="btnNovaConsulta">← Nova consulta</button>
+        <span class="suave mono" id="resCodigoTopo"></span>
+      </div>
+      <div id="avisoCache" class="aviso aviso-info oculto" style="margin-bottom:16px">
+        Não foi possível confirmar os dados mais recentes agora. Exibindo a última atualização registrada.
+      </div>
+      <div class="resultado">
+        <div class="coluna">
+          <article class="cartao entrar">
+            <div class="resumo-topo">
+              <div>
+                <h2 id="resEmpresa"></h2>
+                <p class="resumo-proc" id="resProcesso"></p>
+              </div>
+              <span class="chip" id="resStatus"></span>
+            </div>
+            <div class="metas">
+              <div><div class="meta-rotulo">Código</div><div class="meta-valor mono" id="resCodigo"></div></div>
+              <div><div class="meta-rotulo">Última atualização</div><div class="meta-valor" id="resAtualizado"></div></div>
+            </div>
+            <div class="mensagem-status" id="resMensagem">
+              <div class="bloco-titulo" id="resMensagemTitulo"></div>
+              <p id="resMensagemTexto"></p>
+            </div>
+            <div class="bloco-extra oculto" id="resOrientacao">
+              <div class="bloco-titulo">Orientações da nossa equipe</div>
+              <p id="resOrientacaoTexto"></p>
+            </div>
+            <div class="bloco-extra oculto" id="resProximos">
+              <div class="bloco-titulo">Próximos passos</div>
+              <p id="resProximosTexto"></p>
+            </div>
+          </article>
+        </div>
+        <div class="coluna">
+          <article class="cartao entrar">
+            <h3 style="margin-bottom:18px">Etapas do processo</h3>
+            <ol class="tl" id="resLinhaTempo"></ol>
+            <p class="dica" style="margin-top:18px">As etapas refletem o acompanhamento registrado pela equipe da Ecos e não substituem a comunicação oficial dos órgãos públicos.</p>
+          </article>
+          <article class="cartao contato entrar">
+            <h3>Precisa de ajuda?</h3>
+            <p class="contato-linha">Nossa equipe está à disposição para esclarecer qualquer dúvida sobre o seu processo.</p>
+            <a class="botao botao-primario oculto" id="btnWhats" target="_blank" rel="noopener">Falar com a equipe no WhatsApp</a>
+            <p class="contato-linha" id="contatoLinhas"></p>
+          </article>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="rodape">
+    <span><strong id="rodapeNome"><?= nomeExibicao ?></strong> · <span id="rodapeAssinatura"></span></span>
+    <span>Seus dados são tratados conforme a LGPD e exibidos apenas a quem possui o código de acompanhamento.</span>
+  </footer>
+
+  <?!= include_('PortalScript'); ?>
+</body>
+</html>

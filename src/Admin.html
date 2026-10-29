@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <?!= include_('Styles'); ?>
+  <style>
+    body { background: var(--ecos-areia); }
+    .barra { background: var(--ecos-floresta); color: var(--ecos-areia); }
+    .barra .topo { padding: 12px 24px; }
+    .barra .marca-texto { color: var(--ecos-areia); font-size: 18px; }
+    .barra .marca-sub { color: var(--ecos-nevoa); }
+    .barra .usuario { font-size: 13px; color: var(--ecos-nevoa); display: flex; align-items: center; gap: 12px; }
+    .barra .botao-link { color: var(--ecos-areia); }
+    .abas { display: flex; gap: 4px; max-width: 1180px; margin: 0 auto; padding: 0 24px; overflow-x: auto; }
+    .aba { background: none; border: none; color: var(--ecos-nevoa); padding: 10px 14px; cursor: pointer; font-family: var(--fonte-titulo); font-weight: 600; border-bottom: 3px solid transparent; white-space: nowrap; }
+    .aba[aria-selected="true"] { color: #fff; border-bottom-color: var(--ecos-musgo); }
+
+    .login { max-width: 420px; margin: 8vh auto; display: flex; flex-direction: column; gap: 16px; }
+    .login h1 { font-family: var(--fonte-display); font-weight: 500; font-size: 30px; }
+
+    .cabecalho-secao { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; margin: 28px 0 16px; }
+    .cabecalho-secao h2 { font-size: 22px; }
+    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 12px; }
+    .por-resp { margin-top: 12px; font-size: 14px; color: var(--cor-texto-suave); display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+    .por-resp span.item { background: var(--cor-superficie); border: 1px solid var(--cor-linha); border-radius: 999px; padding: 2px 10px; color: var(--ecos-grafite); }
+    .kpi { text-align: left; cursor: pointer; padding: 16px; border-radius: var(--raio); background: var(--cor-superficie); border: 1px solid var(--cor-linha); transition: border-color var(--transicao); }
+    .kpi:hover, .kpi[aria-pressed="true"] { border-color: var(--ecos-floresta); }
+    .kpi-valor { font-family: var(--fonte-dados); font-size: 28px; font-weight: 500; color: var(--ecos-floresta); line-height: 1.2; }
+    .kpi-rotulo { font-size: 13px; color: var(--cor-texto-suave); }
+    .kpi.is-alerta .kpi-valor { color: var(--ecos-bronze); }
+
+    .filtros { display: grid; grid-template-columns: 2fr repeat(4, 1fr); gap: 10px; margin: 18px 0 10px; }
+    .filtros .entrada { padding: 9px 12px; font-size: 14px; }
+    .filtros-extra { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; font-size: 14px; margin-bottom: 14px; }
+    .filtros-extra label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+
+    .tabela { width: 100%; border-collapse: collapse; background: var(--cor-superficie); border: 1px solid var(--cor-linha); border-radius: var(--raio); overflow: hidden; }
+    .tabela th { text-align: left; font-family: var(--fonte-dados); font-weight: 500; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--ecos-areia); background: var(--ecos-floresta); padding: 10px 12px; }
+    .tabela td { padding: 12px; border-top: 1px solid var(--cor-linha); vertical-align: top; font-size: 14px; }
+    .tabela tbody tr { cursor: pointer; transition: background var(--transicao); }
+    .tabela tbody tr:hover, .tabela tbody tr:focus-visible { background: #FBFAF6; }
+    .empresa { font-weight: 600; }
+    .sub { font-size: 13px; color: var(--cor-texto-suave); }
+    .tag-pend { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 6px; background: var(--cor-alerta-fundo); color: #6B5310; margin: 2px 4px 2px 0; }
+    .tag-ok { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 6px; background: var(--ecos-nevoa); color: var(--ecos-floresta); }
+    .tag-erro { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 6px; background: var(--cor-erro-fundo); color: var(--cor-erro); }
+    .vazio { padding: 32px; text-align: center; color: var(--cor-texto-suave); }
+
+    details.sem-acomp { margin-top: 28px; }
+    details.sem-acomp summary { cursor: pointer; font-family: var(--fonte-titulo); font-weight: 600; color: var(--ecos-floresta); }
+    .lista-simples { list-style: none; margin: 12px 0 0; padding: 0; }
+    .lista-simples li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--cor-linha); font-size: 14px; }
+
+    /* Painel lateral de detalhe */
+    .painel-fundo { position: fixed; inset: 0; background: rgba(32, 31, 28, .38); z-index: 20; }
+    .painel { position: fixed; top: 0; right: 0; bottom: 0; width: min(760px, 100%); background: var(--ecos-areia); z-index: 21; overflow-y: auto; box-shadow: -8px 0 32px rgba(0,0,0,.12); }
+    .painel-topo { position: sticky; top: 0; background: var(--ecos-areia); padding: 18px 24px; border-bottom: 1px solid var(--cor-linha); display: flex; justify-content: space-between; gap: 12px; z-index: 2; }
+    .painel-corpo { padding: 20px 24px 48px; display: flex; flex-direction: column; gap: 18px; }
+    .grade-info { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px 18px; font-size: 14px; }
+    .grade-info .rot { font-size: 12px; color: var(--cor-texto-suave); text-transform: uppercase; letter-spacing: .06em; font-family: var(--fonte-dados); }
+    .linha-acao { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+    .linha-acao .campo { flex: 1 1 220px; }
+    .hist { list-style: none; padding: 0; margin: 0; }
+    .hist li { padding: 10px 0; border-top: 1px solid var(--cor-linha); font-size: 14px; }
+    .hist .quando { font-family: var(--fonte-dados); font-size: 12px; color: var(--cor-texto-suave); }
+    .mini-tabela { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .mini-tabela th, .mini-tabela td { text-align: left; padding: 8px 6px; border-top: 1px solid var(--cor-linha); vertical-align: top; }
+    .mini-tabela th { font-weight: 600; color: var(--cor-texto-suave); border-top: none; }
+
+    .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 40; max-width: min(560px, calc(100% - 32px)); box-shadow: var(--sombra); }
+    dialog { border: none; border-radius: var(--raio); padding: 24px; max-width: 460px; width: calc(100% - 32px); box-shadow: var(--sombra); }
+    dialog::backdrop { background: rgba(32, 31, 28, .45); }
+    dialog h3 { margin-bottom: 10px; }
+    .dialogo-acoes { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+
+    .msg-status { display: grid; gap: 10px; }
+    .config-lista { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; font-size: 14px; }
+    .config-lista dt { color: var(--cor-texto-suave); }
+    .config-lista dd { margin: 0; word-break: break-all; }
+
+    @media (max-width: 900px) {
+      .filtros { grid-template-columns: 1fr 1fr; }
+      .filtros .busca { grid-column: 1 / -1; }
+    }
+    @media (max-width: 640px) {
+      .filtros { grid-template-columns: 1fr; }
+      .barra .topo { flex-wrap: wrap; }
+      .cabecalho-secao h2 { font-size: 20px; }
+    }
+    @media (max-width: 720px) {
+      .tabela thead { display: none; }
+      .tabela, .tabela tbody, .tabela tr, .tabela td { display: block; width: 100%; }
+      .tabela tr { border-top: 1px solid var(--cor-linha); padding: 10px 4px; }
+      .tabela td { border: none; padding: 4px 12px; }
+      .tabela td[data-rot]::before { content: attr(data-rot) ': '; color: var(--cor-texto-suave); font-size: 12px; }
+      .barra .topo, .abas { padding-left: 16px; padding-right: 16px; }
+      .painel-topo, .painel-corpo { padding-left: 16px; padding-right: 16px; }
+      .config-lista { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header class="barra">
+    <div class="topo">
+      <span class="marca">
+        <span>
+          <span class="marca-texto" style="display:block"><?= nomeExibicao ?></span>
+          <span class="marca-sub">Central de Processos · Painel interno</span>
+        </span>
+      </span>
+      <span class="usuario oculto" id="areaUsuario"><span id="usuarioEmail"></span><button class="botao-link" id="btnSair" type="button">Sair</button></span>
+    </div>
+    <nav class="abas oculto" id="abas" role="tablist">
+      <button class="aba" role="tab" aria-selected="true" data-aba="processos" type="button">Processos</button>
+      <button class="aba" role="tab" aria-selected="false" data-aba="mensagens" type="button">Mensagens</button>
+      <button class="aba" role="tab" aria-selected="false" data-aba="config" type="button">Configuração</button>
+    </nav>
+  </header>
+
+  <main class="conteudo">
+    <!-- Login -->
+    <section id="telaLogin" class="login oculto" aria-labelledby="tituloLogin">
+      <span class="kicker">Acesso restrito à equipe</span>
+      <h1 id="tituloLogin">Entrar no painel</h1>
+      <form id="formEmail" class="cartao" style="display:flex;flex-direction:column;gap:14px" novalidate>
+        <div class="campo">
+          <label for="loginEmail">E-mail autorizado</label>
+          <input id="loginEmail" type="email" class="entrada" autocomplete="email" required>
+        </div>
+        <button class="botao botao-primario" type="submit" id="btnPedirCodigo">Receber código de acesso</button>
+      </form>
+      <form id="formCodigo" class="cartao oculto" style="display:flex;flex-direction:column;gap:14px" novalidate>
+        <p class="dica" id="msgCodigo"></p>
+        <div class="campo">
+          <label for="loginCodigo">Código de 6 dígitos</label>
+          <input id="loginCodigo" class="entrada mono" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required>
+        </div>
+        <button class="botao botao-primario" type="submit" id="btnValidar">Entrar</button>
+        <button class="botao-link" type="button" id="btnVoltarEmail">Usar outro e-mail</button>
+      </form>
+      <div id="erroLogin" class="aviso aviso-erro oculto" role="alert"></div>
+    </section>
+
+    <!-- Processos -->
+    <section id="telaProcessos" class="oculto" role="tabpanel">
+      <div class="cabecalho-secao">
+        <div>
+          <h2>Processos em acompanhamento</h2>
+          <p class="sub" id="infoSync"></p>
+        </div>
+        <button class="botao botao-secundario" id="btnAtualizar" type="button">Atualizar</button>
+      </div>
+      <div id="avisoPainel" class="aviso aviso-atencao oculto" style="margin-bottom:14px"></div>
+      <div class="kpis" id="kpis"></div>
+      <div class="por-resp" id="porResp"></div>
+
+      <div class="filtros" role="search">
+        <input class="entrada busca" id="fBusca" type="search" placeholder="Empresa, processo, código ou CNPJ" aria-label="Buscar">
+        <select class="entrada" id="fStatus" aria-label="Status"><option value="">Todos os status</option></select>
+        <select class="entrada" id="fResp" aria-label="Responsável"><option value="">Todos os responsáveis</option></select>
+        <select class="entrada" id="fCampoData" aria-label="Tipo de data"><option value="atualizadoEm">Atualizados</option><option value="criadoEm">Criados</option></select>
+        <span style="display:flex;gap:6px">
+          <input class="entrada" id="fDe" type="date" aria-label="De">
+          <input class="entrada" id="fAte" type="date" aria-label="Até">
+        </span>
+      </div>
+      <div class="filtros-extra">
+        <label><input type="checkbox" id="fPendencia"> Somente com pendência</label>
+        <label><input type="checkbox" id="fParados"> Sem atualização recente</label>
+        <label><input type="checkbox" id="fEncerrados"> Incluir deferidos/fechados</label>
+        <button class="botao-link" type="button" id="btnLimpar">Limpar filtros</button>
+        <span class="sub" id="contagem" aria-live="polite"></span>
+      </div>
+
+      <table class="tabela" aria-describedby="contagem">
+        <thead><tr><th>Empresa / processo</th><th>Status</th><th>Responsável</th><th>Atualização</th><th>Pendências</th><th>Notificação</th></tr></thead>
+        <tbody id="corpoTabela"></tbody>
+      </table>
+      <div id="vazio" class="vazio oculto">Nenhum processo encontrado com os filtros atuais.</div>
+
+      <details class="sem-acomp cartao" id="blocoSemAcomp">
+        <summary>Tarefas da lista sem acompanhamento do cliente (<span id="qtdSemAcomp">0</span>)</summary>
+        <p class="sub" style="margin-top:8px">Somente tarefas com a etiqueta <strong class="mono" id="nomeTag"></strong> aparecem no portal e geram e-mails. Ative apenas processos societários.</p>
+        <ul class="lista-simples" id="listaSemAcomp"></ul>
+      </details>
+    </section>
+
+    <!-- Mensagens -->
+    <section id="telaMensagens" class="oculto" role="tabpanel">
+      <div class="cabecalho-secao">
+        <div>
+          <h2>Mensagens por status</h2>
+          <p class="sub">Exibidas no portal e nos e-mails. Não afirme decisões de órgãos públicos sem respaldo nos dados do processo.</p>
+        </div>
+        <button class="botao botao-primario" id="btnSalvarMsgs" type="button">Salvar mensagens</button>
+      </div>
+      <div id="listaMensagens" style="display:grid;gap:16px"></div>
+    </section>
+
+    <!-- Configuração -->
+    <section id="telaConfig" class="oculto" role="tabpanel">
+      <div class="cabecalho-secao">
+        <div>
+          <h2>Configuração e diagnóstico</h2>
+          <p class="sub">Somente leitura. Credenciais e IDs são alterados nas Propriedades do script (editor do Apps Script).</p>
+        </div>
+        <span style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="botao botao-secundario" id="btnSyncAgora" type="button">Sincronizar agora</button>
+          <button class="botao botao-secundario" id="btnReconciliar" type="button">Reconciliação completa</button>
+        </span>
+      </div>
+      <div id="conteudoConfig" class="cartao"></div>
+    </section>
+  </main>
+
+  <!-- Detalhe -->
+  <div class="painel-fundo oculto" id="painelFundo"></div>
+  <aside class="painel oculto" id="painel" role="dialog" aria-modal="true" aria-labelledby="dEmpresa">
+    <div class="painel-topo">
+      <div>
+        <h2 id="dEmpresa" tabindex="-1"></h2>
+        <p class="sub" id="dProcesso"></p>
+      </div>
+      <button class="botao botao-secundario botao-pequeno" id="btnFecharPainel" type="button" aria-label="Fechar">Fechar</button>
+    </div>
+    <div class="painel-corpo" id="painelCorpo"></div>
+  </aside>
+
+  <dialog id="dialogo">
+    <h3 id="dialogoTitulo"></h3>
+    <p id="dialogoTexto"></p>
+    <div class="dialogo-acoes">
+      <button class="botao botao-secundario" value="nao" id="dialogoNao" type="button">Cancelar</button>
+      <button class="botao botao-primario" value="sim" id="dialogoSim" type="button">Confirmar</button>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast aviso oculto" role="status"></div>
+
+  <?!= include_('AdminScript'); ?>
+</body>
+</html>

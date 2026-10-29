@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title><?= d.titulo ?></title>
+</head>
+<body style="margin:0;padding:0;background:#F8F6F0;">
+<!-- Pré-cabeçalho (texto de prévia na caixa de entrada) -->
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;"><?= d.status ?> — <?= d.empresa ?></div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F8F6F0;">
+  <tr>
+    <td align="center" style="padding:24px 12px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background:#FFFFFF;border:1px solid #D6D1C4;border-radius:12px;">
+        <!-- Cabeçalho -->
+        <tr>
+          <td style="padding:24px 28px 18px 28px;border-bottom:3px solid #123B2A;">
+            <? if (d.temLogo) { ?>
+              <img src="cid:logoEcos" alt="<?= d.nomeExibicao ?>" height="44" style="display:block;height:44px;width:auto;border:0;">
+            <? } else { ?>
+              <span style="font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:bold;color:#123B2A;"><?= d.nomeExibicao ?></span>
+            <? } ?>
+          </td>
+        </tr>
+        <!-- Corpo -->
+        <tr>
+          <td style="padding:28px 28px 8px 28px;font-family:Arial,Helvetica,sans-serif;color:#201F1C;font-size:16px;line-height:24px;">
+            <p style="margin:0 0 12px 0;"><?= d.saudacao ?></p>
+            <p style="margin:0 0 20px 0;">Temos uma atualização sobre o processo da empresa <strong><?= d.empresa ?></strong>.</p>
+            <h1 style="margin:0 0 18px 0;font-family:Georgia,'Times New Roman',serif;font-weight:normal;font-size:26px;line-height:32px;color:#123B2A;"><?= d.titulo ?></h1>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:0 28px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#DCE6DB;border-radius:8px;">
+              <tr><td style="padding:16px 18px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:24px;color:#201F1C;">
+                <span style="color:#5E5B53;">Processo:</span> <strong><?= d.processo ?></strong><br>
+                <span style="color:#5E5B53;">Status atual:</span>
+                <? if (d.grupo === 'exigencia') { ?><strong style="color:#7A5E12;"><?= d.status ?></strong><? } else { ?><strong style="color:#123B2A;"><?= d.status ?></strong><? } ?><br>
+                <span style="color:#5E5B53;">Data da atualização:</span> <?= d.dataHora ?>
+              </td></tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px 28px 0 28px;font-family:Arial,Helvetica,sans-serif;color:#201F1C;font-size:16px;line-height:24px;">
+            <p style="margin:0;white-space:pre-line;"><?= d.mensagem ?></p>
+          </td>
+        </tr>
+        <? if (d.orientacao) { ?>
+        <tr>
+          <td style="padding:16px 28px 0 28px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F5EEDB;border-left:4px solid #A8831E;border-radius:6px;">
+              <tr><td style="padding:14px 16px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:23px;color:#4D3C0E;">
+                <strong>Orientações da nossa equipe</strong><br>
+                <span style="white-space:pre-line;"><?= d.orientacao ?></span>
+              </td></tr>
+            </table>
+          </td>
+        </tr>
+        <? } ?>
+        <? if (d.proximosPassos) { ?>
+        <tr>
+          <td style="padding:16px 28px 0 28px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:23px;color:#201F1C;">
+            <strong style="color:#123B2A;">Próximos passos</strong><br>
+            <span style="white-space:pre-line;"><?= d.proximosPassos ?></span>
+          </td>
+        </tr>
+        <? } ?>
+        <? if (d.link) { ?>
+        <tr>
+          <td style="padding:24px 28px 0 28px;font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#201F1C;">
+            <p style="margin:0 0 16px 0;">Você pode acompanhar as etapas do seu processo clicando no botão abaixo:</p>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr><td align="center" bgcolor="#123B2A" style="border-radius:8px;">
+                <a href="<?= d.link ?>" target="_blank" style="display:inline-block;padding:14px 26px;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:bold;letter-spacing:.04em;color:#F8F6F0;text-decoration:none;border-radius:8px;">ACOMPANHAR MEU PROCESSO</a>
+              </td></tr>
+            </table>
+            <p style="margin:12px 0 0 0;font-size:13px;color:#5E5B53;">Código de acompanhamento: <span style="font-family:'Courier New',monospace;"><?= d.codigo ?></span></p>
+          </td>
+        </tr>
+        <? } ?>
+        <tr>
+          <td style="padding:24px 28px 28px 28px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:23px;color:#201F1C;">
+            <p style="margin:0 0 16px 0;">Se precisar de ajuda, nossa equipe está à disposição<? if (d.whatsapp) { ?> pelo <a href="<?= d.whatsapp ?>" style="color:#123B2A;font-weight:bold;">WhatsApp</a><? } ?>.</p>
+            <p style="margin:0;"><strong style="color:#123B2A;"><?= d.nomeExibicao ?></strong><br>
+            <span style="color:#5C9A4A;"><?= d.assinatura ?></span></p>
+          </td>
+        </tr>
+      </table>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;">
+        <tr><td style="padding:16px 12px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#5E5B53;text-align:center;">
+          Você recebeu este e-mail porque a <?= d.nomeExibicao ?> acompanha um processo societário da sua empresa.
+          <? if (d.contatoEmail) { ?>Dúvidas: <?= d.contatoEmail ?><? } ?><? if (d.contatoTelefone) { ?> · <?= d.contatoTelefone ?><? } ?>.
+          As etapas refletem o acompanhamento da nossa equipe e não substituem comunicações oficiais dos órgãos públicos.
+        </td></tr>
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>

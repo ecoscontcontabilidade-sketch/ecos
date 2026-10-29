@@ -1,0 +1,158 @@
+<script>
+(function () {
+  'use strict';
+
+  var ICONES = {
+    check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.2 4.2L19 7"/></svg>',
+    alerta: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 7v6"/><path d="M12 17h.01"/></svg>',
+    bandeira: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/></svg>',
+    traco: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M7 12h10"/></svg>'
+  };
+  var DESCRICAO_ESTADO = { concluida: 'Etapa concluída', atual: 'Etapa atual', atencao: 'Requer atenção', final: 'Concluído', futura: 'Próxima etapa', nao_ocorreu: 'Não houve exigência' };
+
+  var $ = function (id) { return document.getElementById(id); };
+  var config = null;
+
+  function chamar(fn) {
+    var args = Array.prototype.slice.call(arguments, 1);
+    return new Promise(function (resolve, reject) {
+      var r = google.script.run.withSuccessHandler(resolve).withFailureHandler(reject);
+      r[fn].apply(r, args);
+    });
+  }
+
+  /** Chave aleatória por sessão do navegador (limite de tentativas no servidor). */
+  function chaveCliente() {
+    var k = '';
+    try { k = sessionStorage.getItem('ecosChave') || ''; } catch (e) { k = ''; }
+    if (!k) {
+      var a = new Uint8Array(16);
+      (window.crypto || window.msCrypto).getRandomValues(a);
+      k = Array.prototype.map.call(a, function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+      try { sessionStorage.setItem('ecosChave', k); } catch (e) { /* sem armazenamento: chave por página */ }
+    }
+    return k;
+  }
+
+  function mostrar(el, sim) { el.classList.toggle('oculto', !sim); }
+
+  function aplicarConfig(c) {
+    config = c;
+    if (c.logo) { $('logo').src = c.logo; $('logo').alt = c.nomeExibicao; mostrar($('logo'), true); mostrar($('marcaNome'), false); }
+    $('rodapeAssinatura').textContent = c.assinatura || '';
+    var mini = $('etapasMini');
+    mini.textContent = '';
+    (c.etapas || []).forEach(function (n) { var s = document.createElement('span'); s.textContent = n; mini.appendChild(s); });
+    if (c.whatsapp) {
+      $('linkWhatsSemCodigo').href = c.whatsapp;
+      $('btnWhats').href = c.whatsapp;
+      mostrar($('btnWhats'), true);
+    }
+    var linhas = [];
+    if (c.contatoTelefone) linhas.push('Telefone/WhatsApp: ' + c.contatoTelefone);
+    if (c.contatoEmail) linhas.push('E-mail: ' + c.contatoEmail);
+    $('contatoLinhas').textContent = linhas.join(' · ');
+  }
+
+  function erroConsulta(msg) {
+    var el = $('erroConsulta');
+    el.textContent = msg || '';
+    mostrar(el, !!msg);
+  }
+
+  function carregando(sim) {
+    var b = $('btnConsultar');
+    b.disabled = sim;
+    b.innerHTML = sim ? '<span class="spinner" aria-hidden="true"></span> Consultando…' : 'Consultar processo';
+  }
+
+  function consultar(codigo) {
+    erroConsulta('');
+    if (!codigo || codigo.replace(/[^A-Za-z0-9]/g, '').length < 12) {
+      erroConsulta('Informe o código completo, no formato ECOS-XXXX-XXXX-XXXX.');
+      $('codigo').focus();
+      return;
+    }
+    carregando(true);
+    chamar('portalConsultar', codigo, chaveCliente())
+      .then(function (r) { renderizar(r); })
+      .catch(function (e) { erroConsulta(e && e.message ? e.message : 'Não foi possível consultar agora. Tente novamente.'); })
+      .then(function () { carregando(false); });
+  }
+
+  function renderizar(r) {
+    $('resEmpresa').textContent = r.empresa || 'Seu processo';
+    $('resProcesso').textContent = r.processo || '';
+    var chip = $('resStatus');
+    chip.className = 'chip chip-' + r.grupo;
+    chip.textContent = r.status;
+    $('resCodigo').textContent = r.codigo;
+    $('resCodigoTopo').textContent = r.codigo;
+    $('resAtualizado').textContent = r.atualizadoEm || '—';
+    mostrar($('avisoCache'), !!r.dadosEmCache);
+
+    var msg = $('resMensagem');
+    msg.className = 'mensagem-status' + (r.grupo === 'exigencia' ? ' is-exigencia' : r.grupo === 'deferido' ? ' is-deferido' : '');
+    $('resMensagemTitulo').textContent = r.grupo === 'exigencia' ? 'Há uma exigência no seu processo' :
+      r.grupo === 'deferido' ? 'Processo deferido' : 'Status atual: ' + r.status;
+    $('resMensagemTexto').textContent = r.mensagem || '';
+    $('resOrientacaoTexto').textContent = r.orientacao || '';
+    mostrar($('resOrientacao'), !!r.orientacao);
+    $('resProximosTexto').textContent = r.proximosPassos || '';
+    mostrar($('resProximos'), !!r.proximosPassos);
+
+    var ol = $('resLinhaTempo');
+    ol.textContent = '';
+    (r.etapas || []).forEach(function (et, i) {
+      var li = document.createElement('li');
+      li.className = 'tl-item is-' + et.estado;
+      if (et.estado === 'atual' || et.estado === 'atencao') li.setAttribute('aria-current', 'step');
+      var marca = document.createElement('span');
+      marca.className = 'tl-marca';
+      marca.innerHTML = et.estado === 'concluida' ? ICONES.check : et.estado === 'atencao' ? ICONES.alerta :
+        et.estado === 'final' ? ICONES.bandeira : et.estado === 'nao_ocorreu' ? ICONES.traco : String(i + 1);
+      var corpo = document.createElement('div');
+      var nome = document.createElement('p');
+      nome.className = 'tl-nome';
+      nome.textContent = et.nome;
+      var info = document.createElement('p');
+      info.className = 'tl-info';
+      info.textContent = DESCRICAO_ESTADO[et.estado] + (et.dataTexto ? ' · ' + et.dataTexto : '');
+      corpo.appendChild(nome);
+      corpo.appendChild(info);
+      li.appendChild(marca);
+      li.appendChild(corpo);
+      ol.appendChild(li);
+    });
+
+    if (config && config.whatsapp) {
+      $('btnWhats').href = config.whatsapp.split('?')[0] + '?text=' + encodeURIComponent('Olá! Gostaria de falar sobre o processo ' + r.codigo + '.');
+    }
+    mostrar($('telaConsulta'), false);
+    mostrar($('telaResultado'), true);
+    try { google.script.history.replace(null, { c: r.codigo }); } catch (e) { /* opcional */ }
+    window.scrollTo(0, 0);
+    $('resEmpresa').setAttribute('tabindex', '-1');
+    $('resEmpresa').focus();
+  }
+
+  $('formConsulta').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    consultar($('codigo').value.trim());
+  });
+  $('btnNovaConsulta').addEventListener('click', function () {
+    mostrar($('telaResultado'), false);
+    mostrar($('telaConsulta'), true);
+    $('codigo').value = '';
+    try { google.script.history.replace(null, {}); } catch (e) { /* opcional */ }
+    $('codigo').focus();
+  });
+
+  chamar('portalConfig').then(aplicarConfig).catch(function () { /* página funciona sem config */ });
+  var inicial = $('app').getAttribute('data-codigo');
+  if (inicial) {
+    $('codigo').value = inicial;
+    consultar(inicial);
+  }
+})();
+</script>
