@@ -529,8 +529,8 @@ test('limite de tentativas usa janela fixa: insistir não prolonga o bloqueio', 
   let agora = Date.now();
   amb.g.agora_ = () => agora;
   for (let i = 0; i < 3; i++) exec(amb, (g) => g.adminSolicitarCodigo('admin@ecos.com.br'));
-  agora += 10 * 60000;
+  agora += 2 * 60000;
   assert.throws(() => exec(amb, (g) => g.adminSolicitarCodigo('admin@ecos.com.br')), /Muitas solicitações/);
-  agora += 5 * 60000 + 1000; // 15 min após o 1º pedido
+  agora += 1 * 60000 + 1000; // 3 min após o 1º pedido
   assert.doesNotThrow(() => exec(amb, (g) => g.adminSolicitarCodigo('admin@ecos.com.br')));
 });

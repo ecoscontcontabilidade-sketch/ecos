@@ -21,9 +21,9 @@ function solicitarCodigo_(emailBruto) {
   var email = String(emailBruto || '').trim().toLowerCase();
   if (!emailValido_(email)) throw new ErroApp('Informe um e-mail válido.', 'VALIDACAO');
 
-  // Limites: por e-mail (3 a cada 15 min) e global (30 a cada 15 min).
+  // Limites: por e-mail (3 a cada 3 min) e global (30 a cada 15 min).
   var hEmail = hashComSal_('otp-req|' + email).slice(0, 32);
-  if (incrementarContador_('otpreq:' + hEmail, 900) > 3 || incrementarContador_('otpreq:global', 900) > 30) {
+  if (incrementarContador_('otpreq:' + hEmail, 180) > 3 || incrementarContador_('otpreq:global', 900) > 30) {
     throw new ErroApp('Muitas solicitações. Aguarde alguns minutos e tente novamente.', 'LIMITE');
   }
 

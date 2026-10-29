@@ -128,7 +128,7 @@ A reconciliação diária compara a lista inteira com a planilha: tarefas exclu�
 
 - **Isolamento entre clientes**: consulta somente por código público aleatório `ECOS-XXXX-XXXX-XXXX` (60 bits; não deriva do ID da tarefa nem do CNPJ). A mesma mensagem de erro para código inexistente, inválido ou desativado.
 - **Exposição mínima no portal**: empresa, tipo de processo, código, status, datas das etapas, mensagem e orientação autorizada. Sem CNPJ, e-mail, responsáveis, descrição, comentários, links ou IDs do ClickUp.
-- **Painel**: código de 6 dígitos (10 min, 5 tentativas, 3 pedidos/15 min por e-mail) → sessão aleatória de 256 bits guardada só no servidor (6 h). A autorização é reconferida em cada chamada contra `ADMIN_EMAILS`.
+- **Painel**: código de 6 dígitos (10 min, 5 tentativas, 3 pedidos/3 min por e-mail) → sessão aleatória de 256 bits guardada só no servidor (6 h). A autorização é reconferida em cada chamada contra `ADMIN_EMAILS`.
 - **IDs do navegador nunca são confiáveis**: toda ação relê a tarefa no ClickUp e confere a lista.
 - **Funções internas** protegidas por `_` ou por `exigirContextoInterno_` (gatilho real ou proprietário no editor).
 - **Token do ClickUp** só nas Propriedades do script; nunca vai para HTML, logs, planilha ou mensagens de erro.
