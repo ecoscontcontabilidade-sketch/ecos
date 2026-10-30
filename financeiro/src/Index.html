@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <?!= include_('Styles'); ?>
+</head>
+<body>
+  <header class="barra">
+    <div class="barra-in">
+      <div class="marca">
+        <span class="marca-texto">ECOS</span>
+        <span class="marca-sub">Financeiro · uso interno</span>
+      </div>
+      <nav class="mesnav" aria-label="Mês">
+        <button type="button" id="mesAnterior" aria-label="Mês anterior">‹</button>
+        <span class="rotulo-mes" id="rotuloMes" aria-live="polite">—</span>
+        <button type="button" id="mesSeguinte" aria-label="Próximo mês">›</button>
+        <button type="button" class="btn-hoje" id="mesHoje">Hoje</button>
+      </nav>
+      <span class="usuario" id="usuario"></span>
+    </div>
+  </header>
+
+  <div class="abas" role="tablist" aria-label="Seções">
+    <div class="abas-in">
+      <button class="aba" role="tab" data-aba="hoje" aria-selected="true">Hoje</button>
+      <button class="aba" role="tab" data-aba="receber" aria-selected="false">A receber</button>
+      <button class="aba" role="tab" data-aba="pagar" aria-selected="false">A pagar</button>
+      <button class="aba" role="tab" data-aba="inadimplentes" aria-selected="false">Inadimplentes<span class="contador oculto" id="contInad"></span></button>
+      <button class="aba" role="tab" data-aba="dashboard" aria-selected="false">Dashboard e DRE</button>
+      <button class="aba" role="tab" data-aba="cadastros" aria-selected="false">Cadastros</button>
+    </div>
+  </div>
+
+  <main class="conteudo" id="conteudo">
+    <div class="aviso oculto" id="aviso" role="status"></div>
+
+    <!-- HOJE -->
+    <section data-painel="hoje">
+      <div class="secao-topo">
+        <h2 id="tituloHoje">Hoje</h2>
+        <button class="btn sec" type="button" data-novo="RECEITA">+ Recebimento</button>
+        <button class="btn sec" type="button" data-novo="DESPESA">+ Pagamento</button>
+      </div>
+      <div class="grade grade-4" id="kpisHoje"></div>
+      <div class="grade grade-2" style="margin-top:14px">
+        <div class="cartao"><div class="bloco-titulo"><h3>Receber hoje</h3><span class="total" id="totReceberHoje"></span></div><ul class="itens" id="lstReceberHoje"></ul></div>
+        <div class="cartao"><div class="bloco-titulo"><h3>Pagar hoje</h3><span class="total" id="totPagarHoje"></span></div><ul class="itens" id="lstPagarHoje"></ul></div>
+        <div class="cartao"><div class="bloco-titulo"><h3>Recebimentos em atraso</h3><span class="total negativo" id="totReceberAtrasado"></span></div><ul class="itens" id="lstReceberAtrasado"></ul></div>
+        <div class="cartao"><div class="bloco-titulo"><h3>Pagamentos em atraso</h3><span class="total negativo" id="totPagarAtrasado"></span></div><ul class="itens" id="lstPagarAtrasado"></ul></div>
+        <div class="cartao"><div class="bloco-titulo"><h3>A receber nos próximos 7 dias</h3><span class="total" id="totReceberProximos"></span></div><ul class="itens" id="lstReceberProximos"></ul></div>
+        <div class="cartao"><div class="bloco-titulo"><h3>A pagar nos próximos 7 dias</h3><span class="total" id="totPagarProximos"></span></div><ul class="itens" id="lstPagarProximos"></ul></div>
+      </div>
+    </section>
+
+    <!-- A RECEBER / A PAGAR (mesma estrutura) -->
+    <section data-painel="receber" class="oculto" data-tipo="RECEITA"></section>
+    <section data-painel="pagar" class="oculto" data-tipo="DESPESA"></section>
+
+    <!-- INADIMPLENTES -->
+    <section data-painel="inadimplentes" class="oculto">
+      <div class="secao-topo">
+        <h2>Inadimplentes</h2>
+        <span class="suave" id="resumoInad"></span>
+      </div>
+      <div id="listaInad"></div>
+    </section>
+
+    <!-- DASHBOARD -->
+    <section data-painel="dashboard" class="oculto">
+      <div class="secao-topo">
+        <h2 id="tituloDash">Dashboard do mês</h2>
+      </div>
+      <div class="grade grade-4" id="kpisDash"></div>
+      <div class="grade grade-2" style="margin-top:14px">
+        <div class="cartao">
+          <div class="bloco-titulo"><h3>Saldo de caixa dia a dia</h3><button class="btn link" type="button" id="btnSaldoInicial">Saldo inicial</button></div>
+          <div class="grafico" id="grafSaldo"></div>
+          <div class="legenda"><span><span class="k"></span>Realizado</span><span><span class="k tr"></span>Projetado (previsões em aberto)</span></div>
+          <p class="suave" style="font-size:12.5px;margin-top:6px" id="notaSaldo"></p>
+        </div>
+        <div class="cartao">
+          <div class="bloco-titulo"><h3>Despesas do mês por grupo</h3><span class="total" id="totDespGrupo"></span></div>
+          <ul class="barras" id="grafDespesas"></ul>
+        </div>
+      </div>
+      <div class="cartao" style="margin-top:14px">
+        <div class="bloco-titulo"><h3>DRE gerencial projetada</h3><span class="suave" style="font-size:12.5px">Projetado = baixas + previsões em aberto · mês pelo vencimento</span></div>
+        <div class="tabela-wrap" style="box-shadow:none">
+          <table class="dre"><thead><tr><th>Conta</th><th class="n">Projetado</th><th class="n">Realizado</th><th class="n">A realizar</th><th class="n esconde-cel">% receita</th></tr></thead><tbody id="corpoDre"></tbody></table>
+        </div>
+        <p class="suave" style="font-size:12.5px;margin-top:8px" id="notaDre"></p>
+      </div>
+    </section>
+
+    <!-- CADASTROS -->
+    <section data-painel="cadastros" class="oculto">
+      <div class="secao-topo">
+        <h2>Clientes com honorários mensais</h2>
+        <button class="btn" type="button" data-nova-rec="RECEITA">+ Cliente</button>
+      </div>
+      <div class="tabela-wrap" id="tabClientes"></div>
+      <div class="secao-topo" style="margin-top:28px">
+        <h2>Despesas fixas</h2>
+        <button class="btn" type="button" data-nova-rec="DESPESA">+ Despesa fixa</button>
+      </div>
+      <div class="tabela-wrap" id="tabDespesasFixas"></div>
+      <div class="cartao" style="margin-top:28px">
+        <h3>Como as previsões são geradas</h3>
+        <p class="suave" style="margin-top:6px;font-size:14px">Ao abrir o mês atual (ou um mês futuro), cada cadastro ativo vira uma previsão com o vencimento no dia informado. Editar um cadastro atualiza as previsões em aberto deste mês em diante; desativar remove as dos meses seguintes. Para meses passados, use o botão abaixo.</p>
+        <p style="margin-top:10px"><button class="btn sec" type="button" id="btnGerarMes">Gerar previsões do mês exibido</button></p>
+      </div>
+    </section>
+  </main>
+
+  <!-- Diálogo: lançamento -->
+  <dialog id="dlgLanc" aria-labelledby="dlgLancTitulo">
+    <form method="dialog" id="formLanc" novalidate>
+      <div class="dlg-cab"><h2 id="dlgLancTitulo">Nova previsão</h2></div>
+      <div class="dlg-corpo form-grade">
+        <input type="hidden" name="id"><input type="hidden" name="tipo">
+        <label class="campo largo"><span id="rotContraparte">Cliente</span><input type="text" name="contraparte" list="listaContrapartes" maxlength="120" required autocomplete="off"></label>
+        <label class="campo largo">Descrição<input type="text" name="descricao" maxlength="200" placeholder="Ex.: Honorários de outubro"></label>
+        <label class="campo">Categoria<select name="categoria" required></select></label>
+        <label class="campo">Valor (R$)<input type="text" name="valor" inputmode="decimal" required placeholder="0,00"></label>
+        <label class="campo">Vencimento<input type="date" name="vencimento" required></label>
+        <label class="campo">Forma<select name="forma"></select></label>
+        <div class="largo oculto form-grade" id="camposPago" style="padding:0">
+          <label class="campo">Valor pago (R$)<input type="text" name="valorPago" inputmode="decimal"></label>
+          <label class="campo">Pago em<input type="date" name="dataPagamento"></label>
+        </div>
+        <label class="campo largo">Observação<textarea name="observacao" rows="2" maxlength="500"></textarea></label>
+        <p class="erro-form largo" id="erroLanc" role="alert"></p>
+      </div>
+      <div class="dlg-rodape">
+        <button class="btn sec" type="button" data-fechar>Cancelar</button>
+        <button class="btn" type="submit">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Diálogo: baixa -->
+  <dialog id="dlgBaixa" aria-labelledby="dlgBaixaTitulo">
+    <form method="dialog" id="formBaixa" novalidate>
+      <div class="dlg-cab"><h2 id="dlgBaixaTitulo">Dar baixa</h2><p class="suave" id="baixaResumo" style="margin-top:4px"></p></div>
+      <div class="dlg-corpo form-grade">
+        <input type="hidden" name="id">
+        <label class="campo">Valor pago (R$)<input type="text" name="valorPago" inputmode="decimal" required></label>
+        <label class="campo">Data do pagamento<input type="date" name="dataPagamento" required></label>
+        <label class="campo">Forma<select name="forma"></select></label>
+        <label class="check largo oculto" id="linhaSaldo"><input type="checkbox" name="gerarSaldo" checked> <span>Gerar a diferença (<span id="valorSaldo"></span>) como nova previsão em aberto</span></label>
+        <p class="erro-form largo" id="erroBaixa" role="alert"></p>
+      </div>
+      <div class="dlg-rodape">
+        <button class="btn sec" type="button" data-fechar>Cancelar</button>
+        <button class="btn" type="submit">Confirmar baixa</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Diálogo: recorrência -->
+  <dialog id="dlgRec" aria-labelledby="dlgRecTitulo">
+    <form method="dialog" id="formRec" novalidate>
+      <div class="dlg-cab"><h2 id="dlgRecTitulo">Cadastro</h2></div>
+      <div class="dlg-corpo form-grade">
+        <input type="hidden" name="id"><input type="hidden" name="tipo">
+        <label class="campo largo"><span id="rotRecContraparte">Cliente</span><input type="text" name="contraparte" maxlength="120" required autocomplete="off"></label>
+        <label class="campo largo">Descrição<input type="text" name="descricao" maxlength="200"></label>
+        <label class="campo">Categoria<select name="categoria" required></select></label>
+        <label class="campo">Valor mensal (R$)<input type="text" name="valor" inputmode="decimal" required></label>
+        <label class="campo">Dia do vencimento<input type="number" name="dia" min="1" max="31" required></label>
+        <label class="campo">Forma<select name="forma"></select></label>
+        <label class="campo">Início<input type="month" name="inicio" required></label>
+        <label class="campo">Término (opcional)<input type="month" name="fim"></label>
+        <label class="campo" id="campoDocumento">CNPJ/CPF (opcional)<input type="text" name="documento" maxlength="30"></label>
+        <label class="check" style="align-self:end"><input type="checkbox" name="ativo" checked> <span>Ativo</span></label>
+        <label class="campo largo">Observação<textarea name="observacao" rows="2" maxlength="500"></textarea></label>
+        <p class="erro-form largo" id="erroRec" role="alert"></p>
+      </div>
+      <div class="dlg-rodape">
+        <button class="btn sec" type="button" data-fechar>Cancelar</button>
+        <button class="btn" type="submit">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Diálogo: confirmação -->
+  <dialog id="dlgConfirmar" aria-labelledby="dlgConfTitulo">
+    <div class="dlg-cab"><h2 id="dlgConfTitulo">Confirmar</h2></div>
+    <div class="dlg-corpo"><p id="dlgConfTexto"></p></div>
+    <div class="dlg-rodape">
+      <button class="btn sec" type="button" data-fechar>Cancelar</button>
+      <button class="btn perigo" type="button" id="dlgConfOk">Confirmar</button>
+    </div>
+  </dialog>
+
+  <!-- Diálogo: saldo inicial -->
+  <dialog id="dlgSaldo" aria-labelledby="dlgSaldoTitulo">
+    <form method="dialog" id="formSaldo" novalidate>
+      <div class="dlg-cab"><h2 id="dlgSaldoTitulo">Saldo inicial do mês</h2><p class="suave" style="margin-top:4px;font-size:14px">Saldo em conta no primeiro dia do mês (antes dos lançamentos). Os meses seguintes partem dele automaticamente.</p></div>
+      <div class="dlg-corpo"><label class="campo">Saldo (R$)<input type="text" name="valor" inputmode="decimal" placeholder="Deixe vazio para calcular"></label><p class="erro-form" id="erroSaldo" role="alert"></p></div>
+      <div class="dlg-rodape">
+        <button class="btn sec" type="button" data-fechar>Cancelar</button>
+        <button class="btn" type="submit">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <datalist id="listaContrapartes"></datalist>
+  <div class="toast oculto" id="toast" role="status" aria-live="polite"></div>
+
+  <?!= include_('Script'); ?>
+</body>
+</html>

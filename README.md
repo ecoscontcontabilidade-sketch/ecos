@@ -7,10 +7,15 @@ Portal de acompanhamento de processos societários para clientes e painel intern
 
 Etapas: Aguardando Documentação → Viabilidade → DBE → VRE Digital - JUCESP → Em análise → Exigência → Deferido.
 
+## Financeiro ECOS (controle interno)
+
+Projeto Apps Script separado em [`financeiro/`](financeiro/README.md): previsões de recebimento e pagamento do mês, baixas, inadimplentes, dashboard e DRE gerencial projetada. Sem envio de nada ao cliente.
+
 ## Estrutura
 
 ```
 src/          código do Apps Script (enviar ao projeto)
+financeiro/   Financeiro ECOS (projeto Apps Script próprio, com testes)
 tests/        testes automatizados (Node) e gerador de capturas
 docs/
   ARQUITETURA.md   análise do ClickUp e da identidade, decisões, fluxos, segurança

@@ -1,0 +1,646 @@
+<script>
+(function () {
+  'use strict';
+
+  /* ===================== Utilitários ===================== */
+  var MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+  var DIAS_SEMANA = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
+  var ROTULO_STATUS = { PAGO: 'Pago', VENCIDO: 'Vencido', HOJE: 'Vence hoje', A_VENCER: 'A vencer' };
+  var brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  function $(id) { return document.getElementById(id); }
+  function fmt(n) { return brl.format(Number(n || 0)); }
+  function fmtCurto(n) {
+    var a = Math.abs(n);
+    if (a >= 1000) return (n < 0 ? '−' : '') + 'R$ ' + (a / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mil';
+    return (n < 0 ? '−' : '') + 'R$ ' + Math.round(a);
+  }
+  function fmtData(iso) { return iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) : ''; }
+  function fmtDataCompleta(iso) { return iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4) : ''; }
+  function nomeMes(mes) { var p = mes.split('-'); return MESES[Number(p[1]) - 1] + ' de ' + p[0]; }
+  function somarMeses(mes, n) {
+    var p = mes.split('-').map(Number), t = p[0] * 12 + p[1] - 1 + n;
+    return Math.floor(t / 12) + '-' + String(t % 12 + 1).padStart(2, '0');
+  }
+  function lerValor(s) {
+    var t = String(s || '').replace(/[R$\s]/g, '');
+    if (!t) return NaN;
+    if (t.indexOf(',') >= 0 || /^-?\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, '').replace(',', '.');
+    return Math.round(Number(t) * 100) / 100;
+  }
+  function valorParaCampo(n) { return n === null || n === undefined || n === '' ? '' : Number(n).toFixed(2).replace('.', ','); }
+
+  /** Cria elementos; textos sempre via textContent (dados vêm da planilha). */
+  function el(tag, attrs) {
+    var e = document.createElement(tag);
+    if (attrs) Object.keys(attrs).forEach(function (k) {
+      var v = attrs[k];
+      if (v === null || v === undefined || v === false) return;
+      if (k === 'text') e.textContent = v;
+      else if (k === 'class') e.className = v;
+      else if (k.slice(0, 2) === 'on') e.addEventListener(k.slice(2), v);
+      else e.setAttribute(k, v === true ? '' : v);
+    });
+    for (var i = 2; i < arguments.length; i++) {
+      var c = arguments[i];
+      if (c === null || c === undefined || c === false) continue;
+      (Array.isArray(c) ? c : [c]).forEach(function (x) { if (x !== null && x !== undefined && x !== false) e.appendChild(typeof x === 'string' ? document.createTextNode(x) : x); });
+    }
+    return e;
+  }
+  function limpar(no) { while (no.firstChild) no.removeChild(no.firstChild); return no; }
+
+  var toastTimer = null;
+  function toast(msg, erro) {
+    var t = $('toast');
+    t.textContent = msg;
+    t.className = 'toast' + (erro ? ' erro' : '');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.className = 'toast oculto'; }, erro ? 6000 : 3000);
+  }
+
+  function api(nome) {
+    var args = Array.prototype.slice.call(arguments, 1);
+    return new Promise(function (ok, falha) {
+      var r = google.script.run.withSuccessHandler(ok).withFailureHandler(function (e) { falha(e && e.message ? e : new Error(String(e))); });
+      r[nome].apply(r, args);
+    });
+  }
+
+  /* ===================== Estado ===================== */
+  var estado = {
+    mes: null,
+    aba: 'hoje',
+    dados: null,
+    filtros: { RECEITA: { status: 'TODOS', busca: '' }, DESPESA: { status: 'TODOS', busca: '' } }
+  };
+  try { var abaSalva = localStorage.getItem('fin.aba'); if (abaSalva) estado.aba = abaSalva; } catch (e) { /* sem armazenamento */ }
+
+  function chamar(nome) {
+    var args = Array.prototype.slice.call(arguments);
+    $('conteudo').classList.add('carregando');
+    return api.apply(null, args).then(function (dados) {
+      estado.dados = dados;
+      estado.mes = dados.mes;
+      render();
+      if (dados.aviso) toast(dados.aviso);
+      return dados;
+    }).catch(function (e) {
+      toast(e.message, true);
+      throw e;
+    }).finally(function () {
+      $('conteudo').classList.remove('carregando');
+    });
+  }
+
+  function carregar(mes) { return chamar('finCarregar', mes || estado.mes || ''); }
+
+  /* ===================== Renderização ===================== */
+  function render() {
+    var d = estado.dados;
+    var rotulo = nomeMes(d.mes);
+    $('rotuloMes').textContent = rotulo.charAt(0).toUpperCase() + rotulo.slice(1);
+    $('usuario').textContent = d.usuario;
+    var qtdInad = d.inadimplentes.length;
+    $('contInad').textContent = qtdInad;
+    $('contInad').classList.toggle('oculto', !qtdInad);
+    var aviso = $('aviso');
+    if (!d.recorrencias.length && !d.receitas.length && !d.despesas.length) {
+      aviso.textContent = 'Nenhum cadastro ainda. Cadastre os clientes com honorários e as despesas fixas na aba Cadastros (ou importe o fluxo de caixa pelo editor do Apps Script).';
+      aviso.classList.remove('oculto');
+    } else aviso.classList.add('oculto');
+    preencherContrapartes();
+    trocarAba(estado.aba, true);
+    renderHoje();
+    renderLista('RECEITA');
+    renderLista('DESPESA');
+    renderInadimplentes();
+    renderDashboard();
+    renderCadastros();
+  }
+
+  function trocarAba(aba, semFoco) {
+    estado.aba = aba;
+    try { localStorage.setItem('fin.aba', aba); } catch (e) { /* sem armazenamento */ }
+    document.querySelectorAll('.aba').forEach(function (b) { b.setAttribute('aria-selected', b.dataset.aba === aba ? 'true' : 'false'); });
+    document.querySelectorAll('[data-painel]').forEach(function (s) { s.classList.toggle('oculto', s.dataset.painel !== aba); });
+    // O gráfico mede a largura real do cartão, que só existe com a aba visível.
+    if (aba === 'dashboard' && estado.dados && !semFoco) graficoSaldo($('grafSaldo'), estado.dados.serieSaldo, estado.dados.hoje);
+    if (!semFoco) window.scrollTo(0, 0);
+  }
+
+  function kpi(rotulo, valor, detalhe, classe) {
+    return el('div', { class: 'cartao kpi ' + (classe || '') },
+      el('div', { class: 'rotulo', text: rotulo }),
+      el('div', { class: 'valor' + (typeof valor === 'number' && valor < 0 ? ' negativo' : ''), text: typeof valor === 'number' ? fmt(valor) : valor }),
+      detalhe ? el('div', { class: 'detalhe', text: detalhe }) : null);
+  }
+
+  function selo(l) {
+    var texto = ROTULO_STATUS[l.status] || l.status;
+    if (l.status === 'VENCIDO') texto += ' · ' + l.diasAtraso + (l.diasAtraso === 1 ? ' dia' : ' dias');
+    return el('span', { class: 'selo ' + l.status, text: texto });
+  }
+
+  /* ---------- Hoje ---------- */
+  function itemDia(l, mostrarData) {
+    var sub = (l.descricao || l.categoria) + (mostrarData ? ' · venc. ' + fmtData(l.vencimento) : '') + (l.status === 'VENCIDO' ? ' · ' + l.diasAtraso + (l.diasAtraso === 1 ? ' dia de atraso' : ' dias de atraso') : '');
+    return el('li', { class: 'item' },
+      el('span', { class: 'quem', text: l.contraparte }),
+      el('span', { class: 'v', text: fmt(l.valor) }),
+      el('span', { class: 'acoes' }, el('button', { class: 'btn mini', type: 'button', text: 'Baixar', 'aria-label': 'Dar baixa: ' + l.contraparte, onclick: function () { abrirBaixa(l); } })),
+      el('span', { class: 'oque', text: sub }));
+  }
+
+  function lista(idLista, idTotal, itens, total, vazio, mostrarData) {
+    var ul = limpar($(idLista));
+    $(idTotal).textContent = itens.length ? fmt(total) : '';
+    if (!itens.length) { ul.appendChild(el('li', { class: 'vazio', text: vazio })); return; }
+    itens.slice(0, 40).forEach(function (l) { ul.appendChild(itemDia(l, mostrarData)); });
+    if (itens.length > 40) ul.appendChild(el('li', { class: 'vazio', text: 'e mais ' + (itens.length - 40) + '…' }));
+  }
+
+  function renderHoje() {
+    var d = estado.dados, a = d.agenda, t = a.totais;
+    var p = d.hoje.split('-').map(Number);
+    var dataHoje = new Date(p[0], p[1] - 1, p[2]);
+    $('tituloHoje').textContent = 'Hoje, ' + DIAS_SEMANA[dataHoje.getDay()] + ', ' + p[2] + ' de ' + MESES[p[1] - 1];
+    var k = limpar($('kpisHoje'));
+    k.appendChild(kpi('A receber hoje', t.receberHoje, a.receberHoje.length + ' lançamento(s) · recebido hoje ' + fmt(t.recebidoHoje)));
+    k.appendChild(kpi('A pagar hoje', t.pagarHoje, a.pagarHoje.length + ' lançamento(s) · pago hoje ' + fmt(t.pagoHoje)));
+    k.appendChild(kpi('Em atraso a receber', t.receberAtrasado, a.receberAtrasado.length + ' lançamento(s)', t.receberAtrasado ? 'alerta' : ''));
+    var mesAtual = d.mes === d.mesAtual;
+    k.appendChild(kpi('Saldo projetado no fim do mês', mesAtual ? d.totais.saldoFinalProjetado : '—',
+      mesAtual ? (d.totais.saldoHoje !== null ? 'Saldo hoje ' + fmt(d.totais.saldoHoje) : '') : 'Abra o mês atual para ver', 'destaque'));
+    lista('lstReceberHoje', 'totReceberHoje', a.receberHoje, t.receberHoje, 'Nada a receber hoje.');
+    lista('lstPagarHoje', 'totPagarHoje', a.pagarHoje, t.pagarHoje, 'Nada a pagar hoje.');
+    lista('lstReceberAtrasado', 'totReceberAtrasado', a.receberAtrasado, t.receberAtrasado, 'Nenhum recebimento em atraso.', true);
+    lista('lstPagarAtrasado', 'totPagarAtrasado', a.pagarAtrasado, t.pagarAtrasado, 'Nenhum pagamento em atraso.', true);
+    lista('lstReceberProximos', 'totReceberProximos', a.receberProximos, t.receberProximos, 'Nada previsto para os próximos 7 dias.', true);
+    lista('lstPagarProximos', 'totPagarProximos', a.pagarProximos, t.pagarProximos, 'Nada previsto para os próximos 7 dias.', true);
+  }
+
+  /* ---------- A receber / A pagar ---------- */
+  function renderLista(tipo) {
+    var d = estado.dados;
+    var receita = tipo === 'RECEITA';
+    var sec = limpar(document.querySelector('[data-painel="' + (receita ? 'receber' : 'pagar') + '"]'));
+    var todos = receita ? d.receitas : d.despesas;
+    var t = receita ? d.totais.receitas : d.totais.despesas;
+    var f = estado.filtros[tipo];
+
+    sec.appendChild(el('div', { class: 'secao-topo' },
+      el('h2', { text: (receita ? 'A receber em ' : 'A pagar em ') + nomeMes(d.mes) }),
+      el('button', { class: 'btn', type: 'button', text: receita ? '+ Nova previsão de recebimento' : '+ Nova previsão de pagamento', onclick: function () { abrirLancamento(null, tipo); } })));
+
+    var k = el('div', { class: 'grade grade-4' });
+    k.appendChild(kpi('Previsto no mês', t.previsto, t.qtd + ' lançamento(s)'));
+    k.appendChild(kpi(receita ? 'Recebido' : 'Pago', t.realizado, t.qtdPagos + ' baixado(s)'));
+    k.appendChild(kpi('A vencer', t.aVencer, ''));
+    k.appendChild(kpi('Vencido', t.vencido, t.qtdVencidos + ' lançamento(s)'));
+    sec.appendChild(k);
+
+    var busca = el('input', { type: 'search', placeholder: receita ? 'Buscar cliente ou descrição' : 'Buscar fornecedor ou descrição', 'aria-label': 'Buscar', value: f.busca });
+    var sel = el('select', { 'aria-label': 'Situação' });
+    [['TODOS', 'Todas as situações'], ['ABERTOS', 'Em aberto'], ['VENCIDO', 'Vencidos'], ['HOJE', 'Vencem hoje'], ['A_VENCER', 'A vencer'], ['PAGO', receita ? 'Recebidos' : 'Pagos']].forEach(function (o) {
+      var op = el('option', { value: o[0], text: o[1] });
+      if (o[0] === f.status) op.selected = true;
+      sel.appendChild(op);
+    });
+    var corpo = el('div', { style: 'margin-top:14px' });
+    sec.appendChild(el('div', { class: 'filtros', style: 'margin-top:14px' }, busca, sel));
+    sec.appendChild(corpo);
+
+    function desenhar() {
+      var termo = f.busca.toLowerCase();
+      var itens = todos.filter(function (l) {
+        if (f.status === 'ABERTOS' && l.status === 'PAGO') return false;
+        if (f.status !== 'TODOS' && f.status !== 'ABERTOS' && l.status !== f.status) return false;
+        return !termo || (l.contraparte + ' ' + l.descricao + ' ' + l.categoria).toLowerCase().indexOf(termo) >= 0;
+      });
+      limpar(corpo);
+      if (!itens.length) { corpo.appendChild(el('p', { class: 'vazio', text: todos.length ? 'Nenhum lançamento com esses filtros.' : 'Nenhuma previsão neste mês.' })); return; }
+      var tb = el('tbody');
+      itens.forEach(function (l) { tb.appendChild(linhaLancamento(l)); });
+      var soma = itens.reduce(function (s, l) { return s + l.valor; }, 0);
+      var somaPago = itens.reduce(function (s, l) { return s + (l.valorPago || 0); }, 0);
+      corpo.appendChild(el('div', { class: 'tabela-wrap' }, el('table', null,
+        el('thead', null, el('tr', null, el('th', { text: 'Venc.' }), el('th', { text: receita ? 'Cliente' : 'Fornecedor' }), el('th', { class: 'esconde-cel', text: 'Categoria' }),
+          el('th', { class: 'n', text: 'Previsto' }), el('th', { text: 'Situação' }), el('th', { class: 'n esconde-cel', text: receita ? 'Recebido' : 'Pago' }), el('th', { class: 'col-acoes' }, el('span', { class: 'sr', text: 'Ações' })))),
+        tb,
+        el('tfoot', null, el('tr', null, el('td', { colspan: '2', text: itens.length + ' lançamento(s)' }), el('td', { class: 'esconde-cel' }), el('td', { class: 'n', text: fmt(soma) }), el('td'), el('td', { class: 'n esconde-cel', text: fmt(somaPago) }), el('td'))))));
+    }
+    busca.addEventListener('input', function () { f.busca = busca.value; desenhar(); });
+    sel.addEventListener('change', function () { f.status = sel.value; desenhar(); });
+    desenhar();
+  }
+
+  function linhaLancamento(l) {
+    var acoes = el('td', { class: 'col-acoes' });
+    if (l.status === 'PAGO') {
+      acoes.appendChild(el('button', { class: 'btn link', type: 'button', text: 'Estornar', onclick: function () { confirmarEstorno(l); } }));
+    } else {
+      acoes.appendChild(el('button', { class: 'btn mini', type: 'button', text: 'Baixar', onclick: function () { abrirBaixa(l); } }));
+    }
+    acoes.appendChild(el('button', { class: 'btn link', type: 'button', text: 'Editar', onclick: function () { abrirLancamento(l); } }));
+    if (l.status !== 'PAGO') acoes.appendChild(el('button', { class: 'btn link', type: 'button', text: 'Excluir', onclick: function () { confirmarExclusao(l); } }));
+    return el('tr', { class: l.status === 'PAGO' ? 'pago' : '' },
+      el('td', { class: 'mono', text: fmtData(l.vencimento) }),
+      el('td', null, el('span', { text: l.contraparte }), el('span', { class: 'sub', text: l.descricao + (l.origem === 'RECORRENTE' ? ' · recorrente' : '') })),
+      el('td', { class: 'esconde-cel', text: l.categoria }),
+      el('td', { class: 'n', text: fmt(l.valor) }),
+      el('td', null, selo(l)),
+      el('td', { class: 'n esconde-cel' }, l.valorPago !== null ? el('span', null, el('span', { text: fmt(l.valorPago) }), el('span', { class: 'sub', text: fmtData(l.dataPagamento) + ' · ' + l.forma })) : null),
+      acoes);
+  }
+
+  /* ---------- Inadimplentes ---------- */
+  function renderInadimplentes() {
+    var d = estado.dados, box = limpar($('listaInad'));
+    var total = d.inadimplentes.reduce(function (s, g) { return s + g.total; }, 0);
+    $('resumoInad').textContent = d.inadimplentes.length ? d.inadimplentes.length + ' cliente(s) · ' + fmt(total) + ' em atraso (todos os meses)' : '';
+    if (!d.inadimplentes.length) { box.appendChild(el('div', { class: 'cartao vazio', text: 'Nenhum cliente com recebimento em atraso.' })); return; }
+    var tb = el('tbody');
+    d.inadimplentes.forEach(function (g) {
+      tb.appendChild(el('tr', { class: 'total' },
+        el('td', null, el('strong', { text: g.contraparte }), el('span', { class: 'sub', text: g.quantidade + ' parcela(s) · mais antiga de ' + fmtDataCompleta(g.maisAntigo) })),
+        el('td', { class: 'n', text: g.diasAtraso + ' dias' }),
+        el('td', { class: 'n' }, el('strong', { text: fmt(g.total) })),
+        el('td')));
+      g.itens.forEach(function (l) {
+        tb.appendChild(el('tr', null,
+          el('td', { class: 'nome-grupo' }, el('span', { text: l.descricao }), el('span', { class: 'sub', text: 'Venc. ' + fmtDataCompleta(l.vencimento) + ' · ' + l.forma })),
+          el('td', { class: 'n', text: l.diasAtraso + ' dias' }),
+          el('td', { class: 'n', text: fmt(l.valor) }),
+          el('td', { class: 'col-acoes' },
+            el('button', { class: 'btn mini', type: 'button', text: 'Baixar', onclick: function () { abrirBaixa(l); } }),
+            el('button', { class: 'btn link', type: 'button', text: 'Editar', onclick: function () { abrirLancamento(l); } }),
+            el('button', { class: 'btn link', type: 'button', text: 'Excluir', onclick: function () { confirmarExclusao(l); } }))));
+      });
+    });
+    box.appendChild(el('div', { class: 'tabela-wrap' }, el('table', { class: 'dre' },
+      el('thead', null, el('tr', null, el('th', { text: 'Cliente / parcela' }), el('th', { class: 'n', text: 'Atraso' }), el('th', { class: 'n', text: 'Valor' }), el('th', { class: 'col-acoes' }, el('span', { class: 'sr', text: 'Ações' })))),
+      tb,
+      el('tfoot', null, el('tr', null, el('td', { text: 'Total em atraso' }), el('td'), el('td', { class: 'n', text: fmt(total) }), el('td'))))));
+  }
+
+  /* ---------- Dashboard ---------- */
+  function renderDashboard() {
+    var d = estado.dados, t = d.totais;
+    $('tituloDash').textContent = 'Dashboard de ' + nomeMes(d.mes);
+    var k = limpar($('kpisDash'));
+    k.appendChild(kpi('Receitas do mês', t.receitas.previsto, 'Recebido ' + fmt(t.receitas.realizado)));
+    k.appendChild(kpi('Despesas do mês', t.despesas.previsto, 'Pago ' + fmt(t.despesas.realizado)));
+    k.appendChild(kpi('Resultado projetado', t.resultadoProjetado, t.margemProjetada !== null ? 'Margem ' + String(t.margemProjetada).replace('.', ',') + '% · realizado ' + fmt(t.resultadoRealizado) : 'Realizado ' + fmt(t.resultadoRealizado), 'destaque'));
+    k.appendChild(kpi('Saldo projetado no fim do mês', t.saldoFinalProjetado, 'Saldo inicial ' + fmt(t.saldoInicial) + (t.saldoInformado ? '' : ' (calculado)')));
+    k.appendChild(kpi('A receber (a vencer)', t.receitas.aVencer, ''));
+    k.appendChild(kpi('A pagar (em aberto)', t.despesas.emAberto, t.despesas.vencido ? fmt(t.despesas.vencido) + ' vencido' : ''));
+    k.appendChild(kpi('Em atraso no mês', t.receitas.vencido, t.receitas.qtdVencidos + ' recebimento(s)'));
+    k.appendChild(kpi('Inadimplência do mês', String(t.inadimplenciaPercentual).replace('.', ',') + '%', 'Sobre o que já venceu'));
+
+    var nota = 'Até hoje, o saldo considera só as baixas; depois, as previsões em aberto. Recebimentos em atraso não entram na projeção';
+    nota += t.atrasadosReceber ? ' (se forem recebidos, somam ' + fmt(t.atrasadosReceber) + ').' : '.';
+    if (!t.saldoInformado && !t.saldoBase) nota += ' Informe o saldo inicial para o gráfico refletir o saldo real em conta.';
+    $('notaSaldo').textContent = nota;
+    graficoSaldo($('grafSaldo'), d.serieSaldo, d.hoje);
+
+    var ul = limpar($('grafDespesas'));
+    var max = d.despesasPorGrupo.reduce(function (m, g) { return Math.max(m, g.valor); }, 0);
+    $('totDespGrupo').textContent = fmt(d.despesasPorGrupo.reduce(function (s, g) { return s + g.valor; }, 0));
+    if (!d.despesasPorGrupo.length) ul.appendChild(el('li', { class: 'vazio', text: 'Sem despesas no mês.' }));
+    d.despesasPorGrupo.forEach(function (g) {
+      ul.appendChild(el('li', { title: g.nome + ': ' + fmt(g.valor) },
+        el('span', { text: g.nome }),
+        el('span', { class: 'trilho' }, el('span', { class: 'barra-v', style: 'display:block;width:' + (max ? Math.max(1, g.valor / max * 100) : 0) + '%' })),
+        el('span', { class: 'v', text: fmt(g.valor) })));
+    });
+
+    var tb = limpar($('corpoDre'));
+    d.dre.linhas.forEach(function (l) {
+      var sinal = l.natureza === 'despesa' ? '(−) ' : l.natureza === 'receita' && l.key === 'OUTRAS_REC' ? '(+) ' : '';
+      var classe = l.natureza === 'total' ? 'total' + (l.key === 'RESULTADO' ? ' final' : '') : '';
+      var aRealizar = l.projetado - l.realizado;
+      tb.appendChild(el('tr', { class: classe },
+        el('td', { class: l.natureza === 'total' ? '' : 'nome-grupo', text: sinal + l.nome }),
+        el('td', { class: 'n' + (l.projetado < 0 ? ' negativo' : ''), text: fmt(l.projetado) }),
+        el('td', { class: 'n' + (l.realizado < 0 ? ' negativo' : ''), text: fmt(l.realizado) }),
+        el('td', { class: 'n', text: fmt(aRealizar) }),
+        el('td', { class: 'n esconde-cel', text: l.percentual === null ? '—' : String(l.percentual).replace('.', ',') + '%' })));
+    });
+    var fr = d.dre.foraDoResultado;
+    $('notaDre').textContent = (fr.entradas.projetado || fr.saidas.projetado)
+      ? 'Fora da DRE (afetam só o caixa): entradas ' + fmt(fr.entradas.projetado) + ' · saídas ' + fmt(fr.saidas.projetado) + ' (reservas, aplicações, transferências).'
+      : '';
+  }
+
+  /** Linha do saldo diário: sólida no realizado, tracejada no projetado; cursor com dica. */
+  function graficoSaldo(box, serie, hoje) {
+    limpar(box);
+    var W = Math.max(box.clientWidth || 520, 300), H = 230, m = { l: 68, r: 12, t: 12, b: 26 };
+    var NS = 'http://www.w3.org/2000/svg';
+    function s(tag, a) { var e = document.createElementNS(NS, tag); Object.keys(a || {}).forEach(function (k) { e.setAttribute(k, a[k]); }); return e; }
+    var vals = serie.map(function (p) { return p.saldo; });
+    var lo = Math.min(0, Math.min.apply(null, vals)), hi = Math.max(0, Math.max.apply(null, vals));
+    if (hi === lo) hi = lo + 100;
+    var passo = Math.pow(10, Math.floor(Math.log10((hi - lo) / 4)));
+    [1, 2, 2.5, 5, 10].some(function (f) { if ((hi - lo) / (passo * f) <= 5) { passo *= f; return true; } return false; });
+    lo = Math.floor(lo / passo) * passo; hi = Math.ceil(hi / passo) * passo;
+    var x = function (i) { return m.l + (serie.length === 1 ? 0 : i / (serie.length - 1) * (W - m.l - m.r)); };
+    var y = function (v) { return m.t + (hi - v) / (hi - lo) * (H - m.t - m.b); };
+
+    var svg = s('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': 'Saldo de caixa por dia. Saldo final: ' + fmt(vals[vals.length - 1]), tabindex: '0' });
+    var eixo = s('g', { class: 'eixo' });
+    for (var v = lo; v <= hi + passo / 2; v += passo) {
+      svg.appendChild(s('line', { class: v === 0 ? 'zero' : 'grade-linha', x1: m.l, x2: W - m.r, y1: y(v), y2: y(v) }));
+      var tx = s('text', { x: m.l - 8, y: y(v) + 4, 'text-anchor': 'end' }); tx.textContent = fmtCurto(v); eixo.appendChild(tx);
+    }
+    [0, 9, 19, serie.length - 1].forEach(function (i) {
+      if (!serie[i]) return;
+      var tx = s('text', { x: x(i), y: H - 6, 'text-anchor': i === 0 ? 'start' : i === serie.length - 1 ? 'end' : 'middle' });
+      tx.textContent = fmtData(serie[i].data); eixo.appendChild(tx);
+    });
+    svg.appendChild(eixo);
+
+    var iHoje = -1;
+    serie.forEach(function (p, i) { if (!p.projetado) iHoje = i; });
+    var pts = function (de, ate) { return serie.slice(de, ate + 1).map(function (p, k) { return x(de + k) + ',' + y(p.saldo); }).join(' '); };
+    if (iHoje >= 0) svg.appendChild(s('polyline', { class: 'linha-real', points: pts(0, iHoje) }));
+    if (iHoje < serie.length - 1) svg.appendChild(s('polyline', { class: 'linha-proj', points: pts(Math.max(iHoje, 0), serie.length - 1) }));
+    var iDiaHoje = serie.map(function (p) { return p.data; }).indexOf(hoje);
+    if (iDiaHoje >= 0) {
+      svg.appendChild(s('line', { class: 'hoje-linha', x1: x(iDiaHoje), x2: x(iDiaHoje), y1: m.t, y2: H - m.b }));
+      var th = s('text', { x: x(iDiaHoje) + 4, y: m.t + 10, fill: 'var(--cor-texto-suave)', 'font-size': '11' }); th.textContent = 'hoje'; svg.appendChild(th);
+    }
+    var cursor = s('line', { class: 'cursor', y1: m.t, y2: H - m.b, visibility: 'hidden' });
+    var ponto = s('circle', { class: 'ponto', r: 4.5, visibility: 'hidden' });
+    svg.appendChild(cursor); svg.appendChild(ponto);
+    var alvo = s('rect', { x: m.l, y: m.t, width: W - m.l - m.r, height: H - m.t - m.b, fill: 'transparent' });
+    svg.appendChild(alvo);
+    box.appendChild(svg);
+    var dica = el('div', { class: 'dica oculto' });
+    box.appendChild(dica);
+
+    var atual = iDiaHoje >= 0 ? iDiaHoje : serie.length - 1;
+    function mostrar(i) {
+      atual = i;
+      var p = serie[i], px = x(i), py = y(p.saldo);
+      cursor.setAttribute('x1', px); cursor.setAttribute('x2', px); cursor.setAttribute('visibility', 'visible');
+      ponto.setAttribute('cx', px); ponto.setAttribute('cy', py); ponto.setAttribute('visibility', 'visible');
+      limpar(dica).appendChild(el('strong', { class: p.saldo < 0 ? 'negativo' : '', text: fmt(p.saldo) }));
+      dica.appendChild(el('div', { class: 'suave', text: 'Saldo em ' + fmtDataCompleta(p.data) + (p.projetado ? ' (projetado)' : '') }));
+      if (p.entradas) dica.appendChild(el('div', { text: 'Entradas ' + fmt(p.entradas) }));
+      if (p.saidas) dica.appendChild(el('div', { text: 'Saídas ' + fmt(p.saidas) }));
+      dica.classList.remove('oculto');
+      var escala = box.clientWidth / W;
+      var esq = px * escala + 12;
+      if (esq + 170 > box.clientWidth) esq = px * escala - 182;
+      dica.style.left = Math.max(0, esq) + 'px';
+      dica.style.top = Math.max(0, py * escala - 30) + 'px';
+    }
+    function esconder() { cursor.setAttribute('visibility', 'hidden'); ponto.setAttribute('visibility', 'hidden'); dica.classList.add('oculto'); }
+    alvo.addEventListener('pointermove', function (ev) {
+      var r = svg.getBoundingClientRect();
+      var px = (ev.clientX - r.left) * (W / r.width);
+      var i = Math.round((px - m.l) / (W - m.l - m.r) * (serie.length - 1));
+      mostrar(Math.max(0, Math.min(serie.length - 1, i)));
+    });
+    alvo.addEventListener('pointerleave', esconder);
+    svg.addEventListener('focus', function () { mostrar(atual); });
+    svg.addEventListener('blur', esconder);
+    svg.addEventListener('keydown', function (ev) {
+      if (ev.key === 'ArrowRight') { mostrar(Math.min(serie.length - 1, atual + 1)); ev.preventDefault(); }
+      if (ev.key === 'ArrowLeft') { mostrar(Math.max(0, atual - 1)); ev.preventDefault(); }
+    });
+  }
+
+  /* ---------- Cadastros ---------- */
+  function renderCadastros() {
+    var d = estado.dados;
+    [['RECEITA', 'tabClientes', 'Cliente', 'Nenhum cliente cadastrado.'], ['DESPESA', 'tabDespesasFixas', 'Fornecedor', 'Nenhuma despesa fixa cadastrada.']].forEach(function (cfg) {
+      var box = limpar($(cfg[1]));
+      var regs = d.recorrencias.filter(function (r) { return r.tipo === cfg[0]; })
+        .sort(function (a, b) { return (b.ativo - a.ativo) || a.contraparte.localeCompare(b.contraparte); });
+      if (!regs.length) { box.appendChild(el('p', { class: 'vazio', style: 'padding:14px', text: cfg[3] })); return; }
+      var tb = el('tbody');
+      regs.forEach(function (r) {
+        var periodo = (r.inicio ? 'desde ' + r.inicio.slice(5, 7) + '/' + r.inicio.slice(0, 4) : '') + (r.fim ? ' até ' + r.fim.slice(5, 7) + '/' + r.fim.slice(0, 4) : '');
+        tb.appendChild(el('tr', { class: r.ativo ? '' : 'pago' },
+          el('td', null, el('span', { text: r.contraparte }), el('span', { class: 'sub', text: r.descricao + (r.documento ? ' · ' + r.documento : '') })),
+          el('td', { class: 'esconde-cel', text: r.categoria }),
+          el('td', { class: 'n', text: fmt(r.valor) }),
+          el('td', { class: 'n', text: 'dia ' + r.dia }),
+          el('td', { class: 'esconde-cel', text: r.forma }),
+          el('td', { class: 'esconde-cel', text: periodo }),
+          el('td', null, el('span', { class: 'selo ' + (r.ativo ? 'PAGO' : 'A_VENCER'), text: r.ativo ? 'Ativo' : 'Inativo' })),
+          el('td', { class: 'col-acoes' }, el('button', { class: 'btn link', type: 'button', text: 'Editar', onclick: function () { abrirRecorrencia(r); } }))));
+      });
+      var ativos = regs.filter(function (r) { return r.ativo; });
+      box.appendChild(el('table', null,
+        el('thead', null, el('tr', null, el('th', { text: cfg[2] }), el('th', { class: 'esconde-cel', text: 'Categoria' }), el('th', { class: 'n', text: 'Valor' }), el('th', { class: 'n', text: 'Vencimento' }),
+          el('th', { class: 'esconde-cel', text: 'Forma' }), el('th', { class: 'esconde-cel', text: 'Período' }), el('th', { text: 'Situação' }), el('th', { class: 'col-acoes' }, el('span', { class: 'sr', text: 'Ações' })))),
+        tb,
+        el('tfoot', null, el('tr', null, el('td', { text: ativos.length + ' ativo(s)' }), el('td', { class: 'esconde-cel' }), el('td', { class: 'n', text: fmt(ativos.reduce(function (s, r) { return s + r.valor; }, 0)) }), el('td', { colspan: '5', class: 'suave', text: 'por mês' })))));
+    });
+  }
+
+  function preencherContrapartes() {
+    var dl = limpar($('listaContrapartes')), vistos = {};
+    var d = estado.dados;
+    d.recorrencias.concat(d.receitas, d.despesas).forEach(function (x) {
+      var n = x.contraparte;
+      if (n && !vistos[n.toLowerCase()]) { vistos[n.toLowerCase()] = true; dl.appendChild(el('option', { value: n })); }
+    });
+  }
+
+  /* ===================== Diálogos ===================== */
+  function preencherSelect(sel, opcoes, atual) {
+    limpar(sel);
+    opcoes.forEach(function (o) {
+      var op = el('option', { value: o.valor, text: o.texto });
+      if (o.valor === atual) op.selected = true;
+      sel.appendChild(op);
+    });
+  }
+  function opcoesCategoria(tipo) {
+    var d = estado.dados;
+    var grupos = d.grupos.filter(function (g) { return g.tipo === tipo; });
+    var out = [];
+    grupos.forEach(function (g) {
+      d.categorias.filter(function (c) { return c.tipo === tipo && c.grupo === g.key; }).forEach(function (c) { out.push({ valor: c.nome, texto: c.nome + ' — ' + g.nome }); });
+    });
+    return out;
+  }
+  function opcoesForma() { return estado.dados.formas.map(function (f) { return { valor: f, texto: f }; }); }
+
+  document.querySelectorAll('dialog [data-fechar]').forEach(function (b) {
+    b.addEventListener('click', function () { b.closest('dialog').close(); });
+  });
+
+  function abrirLancamento(l, tipoNovo) {
+    var f = $('formLanc'), tipo = l ? l.tipo : tipoNovo;
+    f.reset();
+    $('erroLanc').textContent = '';
+    $('dlgLancTitulo').textContent = l ? 'Editar lançamento' : (tipo === 'RECEITA' ? 'Nova previsão de recebimento' : 'Nova previsão de pagamento');
+    $('rotContraparte').textContent = tipo === 'RECEITA' ? 'Cliente' : 'Fornecedor';
+    f.id.value = l ? l.id : '';
+    f.tipo.value = tipo;
+    f.contraparte.value = l ? l.contraparte : '';
+    f.descricao.value = l ? l.descricao : '';
+    preencherSelect(f.categoria, opcoesCategoria(tipo), l ? l.categoria : (tipo === 'RECEITA' ? 'Honorários mensais' : 'Outras despesas'));
+    f.valor.value = l ? valorParaCampo(l.valor) : '';
+    var d = estado.dados;
+    f.vencimento.value = l ? l.vencimento : (d.mes === d.mesAtual ? d.hoje : d.mes + '-10');
+    preencherSelect(f.forma, opcoesForma(), l ? l.forma : 'Pix');
+    var pago = l && l.status === 'PAGO';
+    $('camposPago').classList.toggle('oculto', !pago);
+    f.valorPago.value = pago ? valorParaCampo(l.valorPago) : '';
+    f.dataPagamento.value = pago ? l.dataPagamento : '';
+    f.observacao.value = l ? l.observacao : '';
+    $('dlgLanc').showModal();
+    f.contraparte.focus();
+  }
+
+  $('formLanc').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var f = ev.target;
+    var valor = lerValor(f.valor.value);
+    if (!f.contraparte.value.trim()) { $('erroLanc').textContent = 'Informe ' + (f.tipo.value === 'RECEITA' ? 'o cliente.' : 'o fornecedor.'); return; }
+    if (!(valor > 0)) { $('erroLanc').textContent = 'Informe um valor maior que zero.'; return; }
+    if (!f.vencimento.value) { $('erroLanc').textContent = 'Informe o vencimento.'; return; }
+    var dados = {
+      id: f.id.value, tipo: f.tipo.value, contraparte: f.contraparte.value, descricao: f.descricao.value,
+      categoria: f.categoria.value, valor: valor, vencimento: f.vencimento.value, forma: f.forma.value, observacao: f.observacao.value
+    };
+    if (!$('camposPago').classList.contains('oculto')) { dados.valorPago = lerValor(f.valorPago.value); dados.dataPagamento = f.dataPagamento.value; }
+    chamar('finSalvarLancamento', dados, estado.mes).then(function () { $('dlgLanc').close(); toast('Lançamento salvo.'); })
+      .catch(function (e) { $('erroLanc').textContent = e.message; });
+  });
+
+  var baixaAtual = null;
+  function abrirBaixa(l) {
+    baixaAtual = l;
+    var f = $('formBaixa');
+    f.reset();
+    $('erroBaixa').textContent = '';
+    $('dlgBaixaTitulo').textContent = l.tipo === 'RECEITA' ? 'Registrar recebimento' : 'Registrar pagamento';
+    $('baixaResumo').textContent = l.contraparte + ' · ' + l.descricao + ' · previsto ' + fmt(l.valor) + ' em ' + fmtDataCompleta(l.vencimento);
+    f.id.value = l.id;
+    f.valorPago.value = valorParaCampo(l.valor);
+    f.dataPagamento.value = estado.dados.hoje;
+    f.dataPagamento.max = estado.dados.hoje;
+    preencherSelect(f.forma, opcoesForma(), l.forma || 'Pix');
+    atualizarSaldoBaixa();
+    $('dlgBaixa').showModal();
+    f.valorPago.focus();
+    f.valorPago.select();
+  }
+  function atualizarSaldoBaixa() {
+    var v = lerValor($('formBaixa').valorPago.value);
+    var dif = baixaAtual ? Math.round((baixaAtual.valor - v) * 100) / 100 : 0;
+    $('linhaSaldo').classList.toggle('oculto', !(dif > 0));
+    $('valorSaldo').textContent = fmt(dif);
+  }
+  $('formBaixa').valorPago.addEventListener('input', atualizarSaldoBaixa);
+  $('formBaixa').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var f = ev.target, v = lerValor(f.valorPago.value);
+    if (!(v > 0)) { $('erroBaixa').textContent = 'Informe o valor pago.'; return; }
+    if (!f.dataPagamento.value) { $('erroBaixa').textContent = 'Informe a data do pagamento.'; return; }
+    var dados = { valorPago: v, dataPagamento: f.dataPagamento.value, forma: f.forma.value, gerarSaldo: !$('linhaSaldo').classList.contains('oculto') && f.gerarSaldo.checked };
+    chamar('finBaixar', f.id.value, dados, estado.mes).then(function () { $('dlgBaixa').close(); toast('Baixa registrada.'); })
+      .catch(function (e) { $('erroBaixa').textContent = e.message; });
+  });
+
+  var acaoConfirmada = null;
+  function confirmar(titulo, texto, rotulo, acao) {
+    $('dlgConfTitulo').textContent = titulo;
+    $('dlgConfTexto').textContent = texto;
+    $('dlgConfOk').textContent = rotulo;
+    acaoConfirmada = acao;
+    $('dlgConfirmar').showModal();
+  }
+  $('dlgConfOk').addEventListener('click', function () {
+    $('dlgConfirmar').close();
+    if (acaoConfirmada) acaoConfirmada();
+  });
+  function confirmarExclusao(l) {
+    confirmar('Excluir previsão', 'Excluir "' + l.contraparte + ' · ' + l.descricao + '" de ' + fmt(l.valor) + ' (venc. ' + fmtDataCompleta(l.vencimento) + ')? ' +
+      (l.origem === 'RECORRENTE' ? 'Ela não será recriada para este mês. Para parar de gerar nos próximos meses, desative o cadastro.' : ''), 'Excluir',
+      function () { chamar('finExcluir', l.id, estado.mes).then(function () { toast('Previsão excluída.'); }); });
+  }
+  function confirmarEstorno(l) {
+    confirmar('Estornar baixa', 'Desfazer a baixa de ' + fmt(l.valorPago) + ' de "' + l.contraparte + '"? O lançamento volta a ficar em aberto.', 'Estornar',
+      function () { chamar('finEstornar', l.id, estado.mes).then(function () { toast('Baixa estornada.'); }); });
+  }
+
+  function abrirRecorrencia(r, tipoNovo) {
+    var f = $('formRec'), tipo = r ? r.tipo : tipoNovo;
+    f.reset();
+    $('erroRec').textContent = '';
+    $('dlgRecTitulo').textContent = r ? 'Editar cadastro' : (tipo === 'RECEITA' ? 'Novo cliente com honorário mensal' : 'Nova despesa fixa');
+    $('rotRecContraparte').textContent = tipo === 'RECEITA' ? 'Cliente' : 'Fornecedor';
+    $('campoDocumento').classList.toggle('oculto', tipo !== 'RECEITA');
+    f.id.value = r ? r.id : '';
+    f.tipo.value = tipo;
+    f.contraparte.value = r ? r.contraparte : '';
+    f.descricao.value = r ? r.descricao : (tipo === 'RECEITA' ? 'Honorários mensais' : '');
+    preencherSelect(f.categoria, opcoesCategoria(tipo), r ? r.categoria : (tipo === 'RECEITA' ? 'Honorários mensais' : 'Softwares e sistemas'));
+    f.valor.value = r ? valorParaCampo(r.valor) : '';
+    f.dia.value = r ? r.dia : 10;
+    preencherSelect(f.forma, opcoesForma(), r ? r.forma : 'Pix');
+    f.inicio.value = r ? r.inicio : estado.dados.mesAtual;
+    f.fim.value = r ? r.fim : '';
+    f.ativo.checked = r ? r.ativo : true;
+    f.documento.value = r ? r.documento : '';
+    f.observacao.value = r ? r.observacao : '';
+    $('dlgRec').showModal();
+    f.contraparte.focus();
+  }
+  $('formRec').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var f = ev.target, valor = lerValor(f.valor.value);
+    if (!f.contraparte.value.trim()) { $('erroRec').textContent = 'Informe o nome.'; return; }
+    if (!(valor > 0)) { $('erroRec').textContent = 'Informe um valor maior que zero.'; return; }
+    var dados = {
+      id: f.id.value, tipo: f.tipo.value, contraparte: f.contraparte.value, descricao: f.descricao.value, categoria: f.categoria.value,
+      valor: valor, dia: f.dia.value, forma: f.forma.value, inicio: f.inicio.value, fim: f.fim.value, ativo: f.ativo.checked,
+      documento: f.documento.value, observacao: f.observacao.value
+    };
+    chamar('finSalvarRecorrencia', dados, estado.mes).then(function () { $('dlgRec').close(); toast('Cadastro salvo.'); })
+      .catch(function (e) { $('erroRec').textContent = e.message; });
+  });
+
+  $('btnSaldoInicial').addEventListener('click', function () {
+    var t = estado.dados.totais;
+    $('erroSaldo').textContent = '';
+    $('formSaldo').valor.value = t.saldoInformado ? valorParaCampo(t.saldoInicial) : '';
+    $('dlgSaldoTitulo').textContent = 'Saldo inicial de ' + nomeMes(estado.mes);
+    $('dlgSaldo').showModal();
+  });
+  $('formSaldo').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var bruto = ev.target.valor.value.trim();
+    var v = bruto ? lerValor(bruto) : '';
+    if (bruto && isNaN(v)) { $('erroSaldo').textContent = 'Valor inválido.'; return; }
+    chamar('finDefinirSaldoInicial', estado.mes, v).then(function () { $('dlgSaldo').close(); toast('Saldo inicial salvo.'); })
+      .catch(function (e) { $('erroSaldo').textContent = e.message; });
+  });
+
+  /* ===================== Eventos gerais ===================== */
+  document.querySelectorAll('.aba').forEach(function (b) { b.addEventListener('click', function () { trocarAba(b.dataset.aba); }); });
+  document.querySelectorAll('[data-novo]').forEach(function (b) { b.addEventListener('click', function () { abrirLancamento(null, b.dataset.novo); }); });
+  document.querySelectorAll('[data-nova-rec]').forEach(function (b) { b.addEventListener('click', function () { abrirRecorrencia(null, b.dataset.novaRec); }); });
+  $('mesAnterior').addEventListener('click', function () { carregar(somarMeses(estado.mes, -1)); });
+  $('mesSeguinte').addEventListener('click', function () { carregar(somarMeses(estado.mes, 1)); });
+  $('mesHoje').addEventListener('click', function () { carregar(estado.dados ? estado.dados.mesAtual : ''); });
+  $('btnGerarMes').addEventListener('click', function () { chamar('finGerarPrevisoes', estado.mes); });
+  var redimensionar = null;
+  window.addEventListener('resize', function () {
+    clearTimeout(redimensionar);
+    redimensionar = setTimeout(function () { if (estado.dados) graficoSaldo($('grafSaldo'), estado.dados.serieSaldo, estado.dados.hoje); }, 150);
+  });
+
+  trocarAba(estado.aba, true);
+  carregar('');
+})();
+</script>

@@ -71,6 +71,7 @@ class FakeSheet {
   getName() { return this.nome; }
   getLastRow() { return this.rows.length; }
   getRange(r, c, nr, nc) { return new FakeRange(this, r, c, nr, nc); }
+  getDataRange() { return new FakeRange(this, 1, 1, this.rows.length, Math.max(0, ...this.rows.map((l) => l.length))); }
   appendRow(v) { this.rows.push(v.map(celula)); }
   deleteRow(r) { this.rows.splice(r - 1, 1); }
   setFrozenRows() {}
@@ -320,4 +321,4 @@ function ambienteInstalado(extraProps, opcoesAmbiente) {
   return amb;
 }
 
-module.exports = { criarAmbiente, ambienteInstalado };
+module.exports = { criarAmbiente, ambienteInstalado, FakeSpreadsheet, compilarTemplate };
