@@ -20,8 +20,9 @@ var REGRAS_IMPORTACAO = [
   { tipo: 'DESPESA', contraparte: /webcert|certificado/, categoria: 'Certificados digitais (custo)' },
   // Saídas — pela categoria/descrição antiga
   { tipo: 'DESPESA', categoriaAntiga: /cbd|reserva|aplica/, categoria: 'Reserva / aplicação' },
-  { tipo: 'DESPESA', descricao: /pr[oó] ?labore/, categoria: 'Pró-labore' },
-  { tipo: 'DESPESA', categoriaAntiga: /^salario/, categoria: 'Salários' },
+  { tipo: 'DESPESA', descricao: /pr[oó] ?labore/, categoria: 'Pró-labore / distribuição' },
+  // Na planilha antiga, "Salário" é a retirada dos sócios.
+  { tipo: 'DESPESA', categoriaAntiga: /^salario/, categoria: 'Pró-labore / distribuição' },
   { tipo: 'DESPESA', categoriaAntiga: /aplicativo|software/, categoria: 'Softwares e sistemas' },
   { tipo: 'DESPESA', categoriaAntiga: /internet/, categoria: 'Internet e telefone' },
   { tipo: 'DESPESA', categoriaAntiga: /aluguel/, categoria: 'Aluguel' },
@@ -50,7 +51,9 @@ var REGRAS_IMPORTACAO = [
 
 /** Categorias de despesa que não viram despesa fixa (são variáveis por natureza). */
 var CATEGORIAS_NAO_RECORRENTES = ['Taxas e DAREs de processos', 'Certificados digitais (custo)', 'Reserva / aplicação',
-  'Retirada / transferência enviada', 'Outras despesas', 'Transporte', 'Material de escritório', 'Taxas e multas do escritório', 'Comissões e parcerias'];
+  'Retirada / transferência enviada', 'Estornos e devoluções enviadas', 'Outras despesas', 'A esclarecer', 'Transporte',
+  'Alimentação', 'Material de escritório', 'Material impresso', 'Taxas e multas do escritório', 'DARF (tributos federais)',
+  'Tributos municipais', 'Comissões e parcerias', 'Serviços de terceiros', 'Tarifas bancárias e de cobrança'];
 
 function categoriaImportada_(tipo, categoriaAntiga, descricao, contraparte) {
   var ca = normalizar_(categoriaAntiga), de = normalizar_(descricao), co = normalizar_(contraparte);
@@ -108,6 +111,9 @@ function lerFluxoOrigem_(idPlanilha) {
  * (testes); senão é lido da planilha de origem.
  */
 function importarFluxo_(linhas, usuario) {
+  if (origemImportada_() === 'DASHBOARD') {
+    throw new ErroFin('O dashboard financeiro já foi importado. Importar a planilha por cima duplicaria os valores.');
+  }
   var existentes = {};
   lerTodos_(ABAS.LANCAMENTOS).forEach(function (l) { if (l.chave) existentes[l.chave] = true; });
   var novos = [], ignorados = 0, ocorrencias = {};

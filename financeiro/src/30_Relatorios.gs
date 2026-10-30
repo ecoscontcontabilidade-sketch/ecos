@@ -98,7 +98,8 @@ function dre_(doMes, mapaCat) {
     var lb = rl - v('CUSTOS', c);
     var desp = v('PESSOAL', c) + v('ADMIN', c) + v('MARKETING', c) + v('TAXAS', c) + v('OUTRAS_DESP', c);
     var ro = lb - desp;
-    calc[c] = { rb: rb, rl: rl, lb: lb, desp: desp, ro: ro, res: ro + v('OUTRAS_REC', c) };
+    var antesSocios = ro + v('OUTRAS_REC', c);
+    calc[c] = { rb: rb, rl: rl, lb: lb, desp: desp, ro: ro, as: antesSocios, res: antesSocios - v('SOCIOS', c) };
   });
   var grupo = function (key) {
     var g = grupoPorChave_(key);
@@ -122,6 +123,8 @@ function dre_(doMes, mapaCat) {
     grupo('OUTRAS_DESP'),
     total('RESULTADO_OPERACIONAL', 'Resultado operacional', 'ro'),
     grupo('OUTRAS_REC'),
+    total('RESULTADO_ANTES_SOCIOS', 'Resultado antes da remuneração dos sócios', 'as'),
+    grupo('SOCIOS'),
     total('RESULTADO', 'Resultado do mês', 'res')
   ];
   linhas.forEach(function (l) {
@@ -133,6 +136,7 @@ function dre_(doMes, mapaCat) {
       entradas: { projetado: v('NAO_OPER_E', 'projetado'), realizado: v('NAO_OPER_E', 'realizado') },
       saidas: { projetado: v('NAO_OPER_S', 'projetado'), realizado: v('NAO_OPER_S', 'realizado') }
     },
+    margemOperacional: calc.projetado.rb ? Math.round(calc.projetado.as / calc.projetado.rb * 1000) / 10 : null,
     margemProjetada: calc.projetado.rb ? Math.round(calc.projetado.res / calc.projetado.rb * 1000) / 10 : null,
     margemRealizada: calc.realizado.rb ? Math.round(calc.realizado.res / calc.realizado.rb * 1000) / 10 : null
   };
@@ -234,6 +238,8 @@ function montarPainel_(mes, hoje) {
       despesas: td,
       resultadoProjetado: resultado.projetado,
       resultadoRealizado: resultado.realizado,
+      resultadoAntesSocios: demonstrativo.linhas.filter(function (l) { return l.key === 'RESULTADO_ANTES_SOCIOS'; })[0].projetado,
+      margemOperacional: demonstrativo.margemOperacional,
       margemProjetada: demonstrativo.margemProjetada,
       inadimplenciaPercentual: baseInad ? Math.round(tr.vencido / baseInad * 1000) / 10 : 0,
       saldoInicial: saldoIni.valor,

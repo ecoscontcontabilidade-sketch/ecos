@@ -112,6 +112,12 @@
         <p class="suave" style="margin-top:6px;font-size:14px">Ao abrir o mês atual (ou um mês futuro), cada cadastro ativo vira uma previsão com o vencimento no dia informado. Editar um cadastro atualiza as previsões em aberto deste mês em diante; desativar remove as dos meses seguintes. Para meses passados, use o botão abaixo.</p>
         <p style="margin-top:10px"><button class="btn sec" type="button" id="btnGerarMes">Gerar previsões do mês exibido</button></p>
       </div>
+      <div class="cartao oculto" style="margin-top:14px" id="cartaoImportar">
+        <h3>Importar o Dashboard Financeiro (conciliação C6 × Asaas)</h3>
+        <p class="suave" style="margin-top:6px;font-size:14px">Escolha o arquivo <span class="mono">Dashboard_Financeiro_Ecos_2026.html</span>. Entram o histórico de lançamentos (já baixados), os clientes recorrentes e as despesas fixas, a inadimplência real e o saldo inicial de cada mês. O arquivo é lido aqui no navegador; rodar de novo não duplica. Somente a conta proprietária vê esta opção.</p>
+        <p style="margin-top:10px"><label class="btn sec" for="arquivoDashboard" style="display:inline-flex">Escolher arquivo .html</label>
+          <input type="file" id="arquivoDashboard" accept=".html,text/html" class="sr"></p>
+      </div>
     </section>
   </main>
 
@@ -206,6 +212,13 @@
         <button class="btn" type="submit">Salvar</button>
       </div>
     </form>
+  </dialog>
+
+  <!-- Diálogo: resultado da importação -->
+  <dialog id="dlgImportacao" aria-labelledby="dlgImpTitulo">
+    <div class="dlg-cab"><h2 id="dlgImpTitulo">Importação concluída</h2></div>
+    <div class="dlg-corpo" id="dlgImpCorpo" style="max-height:60vh;overflow:auto"></div>
+    <div class="dlg-rodape"><button class="btn" type="button" data-fechar>Fechar</button></div>
   </dialog>
 
   <datalist id="listaContrapartes"></datalist>

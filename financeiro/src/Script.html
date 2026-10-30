@@ -110,6 +110,7 @@
       aviso.classList.remove('oculto');
     } else aviso.classList.add('oculto');
     preencherContrapartes();
+    $('cartaoImportar').classList.toggle('oculto', !d.proprietario);
     trocarAba(estado.aba, true);
     renderHoje();
     renderLista('RECEITA');
@@ -291,7 +292,8 @@
     var k = limpar($('kpisDash'));
     k.appendChild(kpi('Receitas do mês', t.receitas.previsto, 'Recebido ' + fmt(t.receitas.realizado)));
     k.appendChild(kpi('Despesas do mês', t.despesas.previsto, 'Pago ' + fmt(t.despesas.realizado)));
-    k.appendChild(kpi('Resultado projetado', t.resultadoProjetado, t.margemProjetada !== null ? 'Margem ' + String(t.margemProjetada).replace('.', ',') + '% · realizado ' + fmt(t.resultadoRealizado) : 'Realizado ' + fmt(t.resultadoRealizado), 'destaque'));
+    k.appendChild(kpi('Resultado antes dos sócios', t.resultadoAntesSocios,
+      (t.margemOperacional !== null ? 'Margem ' + String(t.margemOperacional).replace('.', ',') + '% · ' : '') + 'após sócios ' + fmt(t.resultadoProjetado), 'destaque'));
     k.appendChild(kpi('Saldo projetado no fim do mês', t.saldoFinalProjetado, 'Saldo inicial ' + fmt(t.saldoInicial) + (t.saldoInformado ? '' : ' (calculado)')));
     k.appendChild(kpi('A receber (a vencer)', t.receitas.aVencer, ''));
     k.appendChild(kpi('A pagar (em aberto)', t.despesas.emAberto, t.despesas.vencido ? fmt(t.despesas.vencido) + ' vencido' : ''));
@@ -625,6 +627,61 @@
     chamar('finDefinirSaldoInicial', estado.mes, v).then(function () { $('dlgSaldo').close(); toast('Saldo inicial salvo.'); })
       .catch(function (e) { $('erroSaldo').textContent = e.message; });
   });
+
+  /* ===================== Importação do dashboard ===================== */
+  /** Extrai o objeto "DATA = {...}" do HTML do dashboard sem executar o arquivo. */
+  function extrairDados(html) {
+    var i = html.search(/\bDATA\s*=\s*\{/);
+    if (i < 0) throw new Error('Este arquivo não parece ser o Dashboard Financeiro (não encontrei os dados).');
+    var ini = html.indexOf('{', i), nivel = 0, emTexto = false, esc = false;
+    for (var j = ini; j < html.length; j++) {
+      var ch = html[j];
+      if (emTexto) { if (esc) esc = false; else if (ch === '\\') esc = true; else if (ch === '"') emTexto = false; continue; }
+      if (ch === '"') emTexto = true;
+      else if (ch === '{') nivel++;
+      else if (ch === '}' && --nivel === 0) return JSON.parse(html.slice(ini, j + 1));
+    }
+    throw new Error('Dados do dashboard incompletos.');
+  }
+
+  $('arquivoDashboard').addEventListener('change', function (ev) {
+    var arq = ev.target.files[0];
+    ev.target.value = '';
+    if (!arq) return;
+    arq.text().then(function (html) {
+      var d = extrairDados(html).d;
+      var envio = {
+        aud: d.aud, churn: d.churn || [], dev: d.dev || [], qui: d.qui || [],
+        fluxo: (d.fluxo || []).map(function (f) { return { mes: f.mes, ini: f.ini }; }),
+        clientes: (d.clientes || []).map(function (c) {
+          return { nome: c.nome, meses: c.meses, pgtos: (c.pgtos || []).map(function (p) { return [p.data, p.valor]; }) };
+        })
+      };
+      toast('Importando ' + envio.aud.length + ' lançamentos…');
+      return chamar('finImportarDashboard', envio).then(function (p) { toast('Importação concluída.'); mostrarImportacao(p.importacao); });
+    }).catch(function (e) { toast(e.message, true); });
+  });
+
+  function mostrarImportacao(r) {
+    var c = limpar($('dlgImpCorpo'));
+    var linhas = [
+      r.importados + ' lançamentos importados como baixados' + (r.ignorados ? ' (' + r.ignorados + ' já existiam)' : ''),
+      r.transferenciasInternas + ' transferências entre contas próprias ignoradas',
+      r.clientes + ' clientes com honorário mensal e ' + r.despesasFixas + ' despesas fixas cadastrados — revise na aba Cadastros',
+      r.emAtraso + ' cobranças em atraso de verdade (' + fmt(r.valorEmAtraso) + ') — veja Inadimplentes',
+      r.saldosIniciais + ' saldos iniciais de mês (extrato C6)'
+    ];
+    c.appendChild(el('ul', { style: 'margin:0;padding-left:18px' }, linhas.map(function (t) { return el('li', { text: t }); })));
+    if (r.baixarNoAsaas.length) {
+      var tot = r.baixarNoAsaas.reduce(function (s, x) { return s + x.emAberto; }, 0);
+      c.appendChild(el('h3', { style: 'margin-top:16px', text: 'Dar baixa no Asaas (já pagos por Pix): ' + fmt(tot) }));
+      c.appendChild(el('p', { class: 'suave', style: 'font-size:13px', text: 'Esses boletos continuam abertos no Asaas, mas os clientes pagaram por Pix. Aqui eles não aparecem como inadimplentes; no Asaas, marque como recebidos em dinheiro para pararem os e-mails de cobrança.' }));
+      c.appendChild(el('ul', { style: 'margin:6px 0 0;padding-left:18px;font-size:14px' }, r.baixarNoAsaas.map(function (x) {
+        return el('li', { text: x.cliente + ' — ' + fmt(x.emAberto) + ' em aberto no Asaas' });
+      })));
+    }
+    $('dlgImportacao').showModal();
+  }
 
   /* ===================== Eventos gerais ===================== */
   document.querySelectorAll('.aba').forEach(function (b) { b.addEventListener('click', function () { trocarAba(b.dataset.aba); }); });

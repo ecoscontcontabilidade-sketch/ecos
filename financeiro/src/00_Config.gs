@@ -35,12 +35,14 @@ var GRUPOS = [
   { key: 'AVULSOS', nome: 'Serviços avulsos', tipo: TIPO.RECEITA },
   { key: 'DEDUCOES', nome: 'Impostos sobre o faturamento', tipo: TIPO.DESPESA },
   { key: 'CUSTOS', nome: 'Custos dos serviços', tipo: TIPO.DESPESA },
-  { key: 'PESSOAL', nome: 'Pessoal e pró-labore', tipo: TIPO.DESPESA },
+  { key: 'PESSOAL', nome: 'Folha e equipe', tipo: TIPO.DESPESA },
   { key: 'ADMIN', nome: 'Despesas administrativas', tipo: TIPO.DESPESA },
   { key: 'MARKETING', nome: 'Marketing', tipo: TIPO.DESPESA },
   { key: 'TAXAS', nome: 'Impostos, taxas e multas', tipo: TIPO.DESPESA },
   { key: 'OUTRAS_DESP', nome: 'Outras despesas', tipo: TIPO.DESPESA },
   { key: 'OUTRAS_REC', nome: 'Outras receitas', tipo: TIPO.RECEITA },
+  /* Remuneração dos sócios fica abaixo do resultado operacional: misturá-la com o custo distorce a margem. */
+  { key: 'SOCIOS', nome: 'Remuneração dos sócios', tipo: TIPO.DESPESA },
   { key: 'NAO_OPER_E', nome: 'Entradas fora do resultado', tipo: TIPO.RECEITA, foraDoResultado: true },
   { key: 'NAO_OPER_S', nome: 'Saídas fora do resultado', tipo: TIPO.DESPESA, foraDoResultado: true }
 ];
@@ -52,18 +54,21 @@ var CATEGORIAS_PADRAO = [
   ['Regularização', TIPO.RECEITA, 'AVULSOS'],
   ['IRPF', TIPO.RECEITA, 'AVULSOS'],
   ['Certificado digital', TIPO.RECEITA, 'AVULSOS'],
+  ['Parcerias e terceirização', TIPO.RECEITA, 'AVULSOS'],
   ['Outros serviços avulsos', TIPO.RECEITA, 'AVULSOS'],
   ['Reembolso de taxas', TIPO.RECEITA, 'OUTRAS_REC'],
   ['Rendimentos', TIPO.RECEITA, 'OUTRAS_REC'],
   ['Outras receitas', TIPO.RECEITA, 'OUTRAS_REC'],
   ['Aporte / transferência recebida', TIPO.RECEITA, 'NAO_OPER_E'],
+  ['Resgate de aplicação', TIPO.RECEITA, 'NAO_OPER_E'],
+  ['Estornos e devoluções recebidas', TIPO.RECEITA, 'NAO_OPER_E'],
 
   ['Simples Nacional (DAS)', TIPO.DESPESA, 'DEDUCOES'],
   ['ISS', TIPO.DESPESA, 'DEDUCOES'],
   ['Taxas e DAREs de processos', TIPO.DESPESA, 'CUSTOS'],
   ['Certificados digitais (custo)', TIPO.DESPESA, 'CUSTOS'],
   ['Comissões e parcerias', TIPO.DESPESA, 'CUSTOS'],
-  ['Pró-labore', TIPO.DESPESA, 'PESSOAL'],
+  ['Serviços de terceiros', TIPO.DESPESA, 'CUSTOS'],
   ['Salários', TIPO.DESPESA, 'PESSOAL'],
   ['Encargos e benefícios', TIPO.DESPESA, 'PESSOAL'],
   ['Softwares e sistemas', TIPO.DESPESA, 'ADMIN'],
@@ -74,13 +79,20 @@ var CATEGORIAS_PADRAO = [
   ['Anuidade CRC', TIPO.DESPESA, 'ADMIN'],
   ['Transporte', TIPO.DESPESA, 'ADMIN'],
   ['Cursos e treinamentos', TIPO.DESPESA, 'ADMIN'],
-  ['Tarifas bancárias', TIPO.DESPESA, 'ADMIN'],
+  ['Tarifas bancárias e de cobrança', TIPO.DESPESA, 'ADMIN'],
+  ['Alimentação', TIPO.DESPESA, 'ADMIN'],
   ['Agência de marketing', TIPO.DESPESA, 'MARKETING'],
   ['Mídia paga', TIPO.DESPESA, 'MARKETING'],
+  ['Material impresso', TIPO.DESPESA, 'MARKETING'],
+  ['DARF (tributos federais)', TIPO.DESPESA, 'TAXAS'],
+  ['Tributos municipais', TIPO.DESPESA, 'TAXAS'],
   ['Taxas e multas do escritório', TIPO.DESPESA, 'TAXAS'],
+  ['A esclarecer', TIPO.DESPESA, 'OUTRAS_DESP'],
   ['Outras despesas', TIPO.DESPESA, 'OUTRAS_DESP'],
+  ['Pró-labore / distribuição', TIPO.DESPESA, 'SOCIOS'],
   ['Reserva / aplicação', TIPO.DESPESA, 'NAO_OPER_S'],
-  ['Retirada / transferência enviada', TIPO.DESPESA, 'NAO_OPER_S']
+  ['Retirada / transferência enviada', TIPO.DESPESA, 'NAO_OPER_S'],
+  ['Estornos e devoluções enviadas', TIPO.DESPESA, 'NAO_OPER_S']
 ];
 
 var memoProps_ = null;

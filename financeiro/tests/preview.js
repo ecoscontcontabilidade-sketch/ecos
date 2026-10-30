@@ -1,10 +1,11 @@
 /**
  * Gera capturas de tela do Financeiro com o backend simulado (Playwright).
- * Uso: node financeiro/tests/preview.js <pasta-de-saida> [linhas.json]
+ * Uso: node financeiro/tests/preview.js <pasta-de-saida> [linhas.json | Dashboard.html]
  *
- * linhas.json (opcional): linhas da aba "Fluxo de Caixa" já exportadas, no formato
- * [["", "aaaa-mm-dd", valor, forma, conta, cliente/fornecedor, categoria, descrição], ...].
- * Sem ele, usa um pequeno conjunto de demonstração. Não versione dados reais.
+ * - linhas.json: linhas da aba "Fluxo de Caixa" já exportadas, no formato
+ *   [["", "aaaa-mm-dd", valor, forma, conta, cliente/fornecedor, categoria, descrição], ...].
+ * - Dashboard.html: o Dashboard Financeiro, importado pela própria tela (botão em Cadastros).
+ * Sem argumento, usa um pequeno conjunto de demonstração. Não versione dados reais.
  */
 'use strict';
 
@@ -15,6 +16,7 @@ const { ambienteInstalado, exec } = require('./harness');
 
 const saida = process.argv[2] || path.join(__dirname, '..', '..', 'preview', 'financeiro');
 const arquivoLinhas = process.argv[3];
+const viaDashboard = /\.html$/i.test(arquivoLinhas || '');
 fs.mkdirSync(saida, { recursive: true });
 
 const DEMO = [
@@ -30,6 +32,7 @@ const DEMO = [
 
 function prepararAmbiente() {
   const amb = ambienteInstalado();
+  if (viaDashboard) return amb;
   amb.props.FLUXO_ORIGEM_ID = 'origem';
   const sh = amb.origem.insertSheet('Fluxo de Caixa');
   sh.rows.push(['', 'Data', 'Valor', 'Forma de Pgmt.', 'Conta destino', 'Cliente/Fornecedor', 'Categoria', 'Descrição']);
@@ -85,6 +88,13 @@ const STUB = `<script>
     });
     await page.setContent(html, { waitUntil: 'networkidle' });
     await page.waitForSelector('#lstReceberHoje li');
+    if (viaDashboard && nome === 'desktop') {
+      await page.click('.aba[data-aba="cadastros"]');
+      await page.setInputFiles('#arquivoDashboard', path.resolve(arquivoLinhas));
+      await page.waitForSelector('#dlgImportacao[open]', { timeout: 60000 });
+      await page.screenshot({ path: path.join(saida, 'importacao-desktop.png') });
+      await page.click('#dlgImportacao [data-fechar]');
+    }
     for (const aba of ['hoje', 'receber', 'pagar', 'inadimplentes', 'dashboard', 'cadastros']) {
       await page.click(`.aba[data-aba="${aba}"]`);
       await page.waitForTimeout(150);

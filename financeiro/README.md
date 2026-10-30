@@ -38,9 +38,11 @@ O mês é escolhido no topo (‹ ›). A aba Hoje é sempre relativa à data de 
 = Receita líquida
 (−) Custos dos serviços (DAREs/taxas de processos, certificados, comissões)
 = Lucro bruto
-(−) Pessoal e pró-labore · Administrativas (softwares, internet, aluguel…) · Marketing · Impostos, taxas e multas · Outras
+(−) Folha e equipe · Administrativas (softwares, internet, alimentação…) · Marketing · Impostos, taxas e multas · Outras (inclui "A esclarecer")
 = Resultado operacional
 (+) Outras receitas
+= Resultado antes da remuneração dos sócios
+(−) Remuneração dos sócios (pró-labore / distribuição)
 = Resultado do mês
 ```
 
@@ -50,13 +52,31 @@ O plano de categorias fica na aba `Categorias` da planilha. Dá para incluir cat
 
 1. Crie um projeto em <https://script.google.com> com a conta `ecos.cont.contabilidade@gmail.com` (projeto **separado** da Central de Processos) e copie os arquivos de `financeiro/src/`, incluindo `appsscript.json` (ative "Mostrar arquivo de manifesto" nas configurações). Também dá para usar o `clasp` com `financeiro/.clasp.json.example`.
 2. No editor, execute **`instalar`** e autorize. É criada a planilha "Financeiro ECOS — base", com o link no registro de execução. O proprietário passa a ser o único usuário autorizado.
-3. *(Opcional, recomendado)* Importe o histórico:
-   - Em Configurações do projeto → Propriedades do script, crie `FLUXO_ORIGEM_ID` com o ID da planilha **Ecos - Fluxo de caixa 2026** (`1utglzkUgb8klFGOMaBr8MRD1xAZJeb9V35pd34EZODU`).
-   - Execute **`importarFluxoDeCaixa`**. Cada linha da aba "Fluxo de Caixa" vira um lançamento baixado, com a categoria convertida para o plano da DRE (ex.: Jettax/Domínio/Claude → Softwares, DAREs → Custos dos serviços). Com base nos 3 últimos meses importados, são criados os **clientes com honorário mensal** e as **despesas fixas**, ativos a partir do mês seguinte ao último importado. Pode ser executada de novo sem duplicar.
-   - Na aba Cadastros, revise valores e dias. No Dashboard de setembro, informe o **saldo inicial** e use **Gerar previsões do mês exibido** se quiser baixar setembro também.
-4. **Publique**: Implantar → Nova implantação → App da Web, **Executar como: usuário que acessa o app** e **Quem pode acessar: qualquer pessoa com conta do Google**. O Google exige login, e cada pessoa só lê ou grava se a planilha base tiver sido compartilhada com ela.
+3. **Publique**: Implantar → Nova implantação → App da Web, **Executar como: usuário que acessa o app** e **Quem pode acessar: qualquer pessoa com conta do Google**. O Google exige login, e cada pessoa só lê ou grava se a planilha base tiver sido compartilhada com ela.
+4. **Importe o histórico**: com a conta proprietária, abra o painel e use **Cadastros → Importar o Dashboard Financeiro** (detalhes abaixo). Revise os cadastros sugeridos.
 5. **Equipe**: compartilhe a planilha base (Editor) com cada pessoa e inclua os e-mails na propriedade `FIN_EMAILS` (separados por vírgula). No primeiro acesso, cada pessoa autoriza o app; o aviso de "app não verificado" é esperado em projetos internos.
 6. Execute `verificarConfiguracao` para conferir.
+
+### Importar o histórico: Dashboard Financeiro (recomendado)
+
+O arquivo `Dashboard_Financeiro_Ecos_2026.html` (conciliação do extrato C6 Bank com o Asaas) é a fonte mais completa. Na aba **Cadastros**, a conta proprietária escolhe o arquivo e o painel lê os dados no navegador. O app não precisa de acesso ao Drive.
+
+| O que entra | Como |
+| --- | --- |
+| Lançamentos do extrato C6 e do Asaas | Baixados, com a categoria convertida para a DRE. A observação guarda a descrição original e a confiança da classificação. **Transferências Asaas → C6 ficam de fora**: o recebimento já conta quando entra no Asaas. |
+| Nome do cliente | O do cadastro do dashboard. O extrato traz o nome do Pix ("12.345.678 MARIA…"), e o cliente é achado pelo pagamento (data e valor). |
+| Clientes com honorário mensal | Clientes com pagamento em 3 meses ou mais, que não pararam de pagar e pagaram em agosto, setembro ou no mês em curso. Valor = mediana dos pagamentos dos 3 meses fechados (um mês com serviço extra não infla o valor). Dia = mediana dos dias de pagamento. |
+| Despesas fixas | Mesmo fornecedor e categoria em 2 dos 3 meses fechados (gastos variáveis como alimentação, DARF e taxas não entram). Valor = mediana dos totais mensais. |
+| Mês em curso | Quem já pagou no mês começa a gerar previsão no mês seguinte. Quem não pagou aparece "a receber". |
+| Inadimplência | Só a **real** ("Quem realmente deve"): o que o cliente pagou, por Asaas ou Pix, abate as cobranças mais antigas, e o que sobra vira previsão vencida. |
+| Boletos já pagos por Pix | Não viram inadimplência. A tela de conclusão lista esses clientes para dar baixa no Asaas e parar os e-mails de cobrança. |
+| Saldo inicial de cada mês | Saldo do extrato C6 no primeiro dia (não sobrescreve saldo já informado). |
+
+Rodar de novo não duplica nada. A planilha "Fluxo de caixa" e o dashboard não podem ser importados juntos: o segundo seria recusado para não duplicar valores.
+
+### Alternativa: planilha "Ecos - Fluxo de caixa 2026"
+
+Para importar a planilha antiga, defina a propriedade `FLUXO_ORIGEM_ID` com o ID da planilha (`1utglzkUgb8klFGOMaBr8MRD1xAZJeb9V35pd34EZODU`) e execute **`importarFluxoDeCaixa`** no editor. Ela vai só até agosto de 2026 e as categorias são menos precisas. Prefira o dashboard.
 
 ### Propriedades do script
 
@@ -83,7 +103,8 @@ src/01_Util.gs         datas ISO, meses, valores em R$, lock
 src/10_Store.gs        planilha base (leitura/gravação por linha, config, log)
 src/20_Lancamentos.gs  previsões, baixa, estorno, exclusão, recorrências, saldo inicial
 src/30_Relatorios.gs   agenda do dia, inadimplentes, totais, DRE, saldo diário
-src/40_Importacao.gs   importação do fluxo de caixa e sugestão de recorrências
+src/40_Importacao.gs   importação da planilha de fluxo de caixa
+src/41_ImportacaoDashboard.gs  importação do Dashboard Financeiro (C6 × Asaas)
 src/50_Api.gs          doGet e funções do navegador (fin*)
 src/60_Setup.gs        instalar, importarFluxoDeCaixa, verificarConfiguracao
 src/Index.html · Script.html · Styles.html   interface
@@ -98,4 +119,4 @@ npm test
 node financeiro/tests/preview.js preview/financeiro
 ```
 
-O gerador de capturas aceita um JSON com as linhas do fluxo de caixa como segundo argumento, para ver as telas com dados reais localmente. Não versione esse arquivo.
+O gerador de capturas aceita, como segundo argumento, o HTML do dashboard (importado pela tela) ou um JSON com as linhas do fluxo de caixa, para ver as telas com dados reais localmente. Não versione esse arquivo.

@@ -54,6 +54,7 @@ function painelAtualizado_(mes, hoje, usuario) {
   p.categorias = categorias_();
   p.grupos = GRUPOS.map(function (g) { return { key: g.key, nome: g.nome, tipo: g.tipo, foraDoResultado: !!g.foraDoResultado }; });
   p.formas = FORMAS;
+  p.proprietario = usuario === prop_('PROPRIETARIO', '').toLowerCase();
   return p;
 }
 
@@ -123,5 +124,23 @@ function finDefinirSaldoInicial(mes, valor) {
     mes = mesValido_(mes, hoje);
     comLock_(function () { definirSaldoInicial_(mes, valor, usuario); });
     return painelAtualizado_(mes, hoje, usuario);
+  });
+}
+
+/**
+ * Importa o Dashboard Financeiro (HTML). O navegador lê o arquivo e envia o objeto DATA.d;
+ * só a conta proprietária pode importar.
+ */
+function finImportarDashboard(dados) {
+  return executarApi_('finImportarDashboard', function (usuario, hoje) {
+    if (usuario !== prop_('PROPRIETARIO', '').toLowerCase()) throw new ErroFin('Somente a conta proprietária pode importar dados.');
+    var r = comLock_(function () {
+      var res = importarDashboard_(dados, usuario);
+      gerarAutomatico_(mesDe_(hoje), hoje, usuario);
+      return res;
+    });
+    var p = painelAtualizado_(mesDe_(hoje), hoje, usuario);
+    p.importacao = r;
+    return p;
   });
 }
